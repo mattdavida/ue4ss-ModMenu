@@ -18,7 +18,19 @@ Reference host: `Mods/DevToolsMasterMod/`
 ue4ss/Mods/
   shared/
     ModMenu/
-      ModMenu.lua           ← this library
+      ModMenu.lua           ← public API + shell
+      core/                 ← util, umg, input, options
+        util.lua
+        umg.lua
+        input.lua
+        options.lua
+      widgets/              ← one module per item type + registry
+        init.lua
+        separator.lua
+        label.lua
+        button.lua
+        checkbox.lua
+        dropdown.lua
       README.md
       GithubAssets/         ← screenshots for docs (optional)
     UEHelpers/              ← already required by UE4SS layouts
@@ -36,6 +48,19 @@ local ModMenu = require("ModMenu.ModMenu")
 ```
 
 The host mod must be enabled (`enabled.txt` / `mods.txt`). The `shared/ModMenu` folder is loaded via `require`; it is not a separate enabled mod.
+
+### Player / Nexus zip (runtime only)
+
+Ship the host **and** the ModMenu runtime tree. Omit docs and screenshots:
+
+```
+Mods/YourHostMod/
+Mods/shared/ModMenu/ModMenu.lua
+Mods/shared/ModMenu/core/*.lua
+Mods/shared/ModMenu/widgets/*.lua
+```
+
+Do **not** require `README.md` or `GithubAssets/` in the zip (use gallery images on Nexus instead).
 
 ---
 
@@ -205,9 +230,55 @@ ModMenu.GetDock()
 
 ---
 
+## Extending: widget contract
+
+Item types live under `widgets/`. The shell never hard-codes control UMG — it asks the registry.
+
+### Contract
+
+Each widget module returns a table:
+
+| Field | Required | Role |
+|-------|----------|------|
+| `type` | yes | String id (`"button"`, …) |
+| `validate(item, sectionId, index)` | no | Throw on bad Register fields |
+| `seed(sectionId, item, values)` | no | Default into values store on Register |
+| `build(ctx)` | yes | Construct UMG; append to `ctx.liveControls` |
+| `poll(ctrl, ctx)` | no | Continuous tick (checkbox state, search filter) |
+| `pollClick(ctrl, ctx)` | no | LMB click handler; return `true` if consumed |
+| `apply(ctrl, value, ctx)` | no | Sync live widget from `ModMenu.Set` / `SetLabel` |
+
+Dropdown also exposes helpers used by the shell (`refreshLive`, `collapseAll`, …).
+
+### Build `ctx`
+
+| Field | Purpose |
+|-------|---------|
+| `contentBox` | Parent vertical box |
+| `section` / `item` | Current section + item |
+| `namePrefix` | Unique FName prefix |
+| `values` / `liveControls` | Shared store + control records |
+| `config` | Fonts / layout from `Init` |
+| `umg` | `ModMenu.core.umg` |
+| `Input` | `ModMenu.core.input` |
+| `ValueKey` / `SafeCall` / `IsValid` | Helpers |
+| `ReclaimMenuInput` / `EnsureMenuVisible` | Shell input helpers |
+
+### Adding a new type (PR checklist)
+
+1. Create `widgets/<type>.lua` implementing the contract (copy `button.lua` or `checkbox.lua`).
+2. `register(require("ModMenu.widgets.<type>"))` in `widgets/init.lua`.
+3. Document fields under **Item types** below.
+4. Smoke-test via a host `Register` section.
+
+Natural follow-ons (not required for hosts): tabbed sections, `textinput`, `slider` / `number` widgets — same contract as above.
+
+---
+
 ## Item types
 
-Supported: `checkbox` | `button` | `dropdown` | `label` | `separator`
+Supported: `checkbox` | `button` | `dropdown` | `label` | `separator`  
+(Implemented in `widgets/<type>.lua`.)
 
 ### `separator`
 
@@ -365,6 +436,13 @@ ModMenu.Register({
 })
 ```
 
-Ship `MyCheatMenu/` **and** ensure players already have (or you bundle) `Mods/shared/ModMenu/ModMenu.lua`.
+Ship `MyCheatMenu/` **and** the full ModMenu runtime (`ModMenu.lua` + `core/` + `widgets/`). See **Player / Nexus zip** above.
 
 ---
+
+## See also
+
+- Host: `Mods/DevToolsMasterMod/Scripts/main.lua`
+- Simple section: `Mods/DevToolsMasterMod/Scripts/maxrank.lua`
+- Dynamic searchable section: `Mods/DevToolsMasterMod/Scripts/items.lua`
+- Widget registry: `widgets/init.lua`

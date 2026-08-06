@@ -27,7 +27,7 @@
   Singleton shell: one panel / one hotkey; mods Register sections into it.
   Dock presets: Left / Right via header button (session only; no free drag).
 
-  Internals: core/ helpers + widgets/ registry (see refactor-plan.md).
+  Internals: core/ helpers + widgets/ registry (see README.md).
 ]]
 
 local UEHelpers = require("UEHelpers.UEHelpers")
