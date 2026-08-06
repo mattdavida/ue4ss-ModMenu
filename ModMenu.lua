@@ -29,21 +29,39 @@
 ]]
 
 local UEHelpers = require("UEHelpers.UEHelpers")
+local Util = require("ModMenu.core.util")
+local Umg = require("ModMenu.core.umg")
+local Input = require("ModMenu.core.input")
+local Options = require("ModMenu.core.options")
 
 local ModMenu = {}
 
-local LIB_NAME = "ModMenu"
 local VIEWPORT_Z = 1000
 local POLL_MS = 50
 
 local VIS_VISIBLE = 0
 local VIS_COLLAPSED = 1
 
--- LMB click latch: IsPressed() polling misses short clicks on constructed UButtons.
-local mouseClickLatch = false
-local mouseBindInstalled = false
-local clickIgnore = 0 -- swallow follow-up LMB events after a dropdown select
 local dropdownRowSerial = 0 -- unique FNames when rebuilding filtered option rows
+
+-- Local aliases — same call sites as pre-extract (Phase 1: core/ only).
+local Log = Util.Log
+local IsValid = Util.IsValid
+local ToPlainString = Util.ToPlainString
+local ValueKey = Util.ValueKey
+local SafeCall = Util.SafeCall
+local ConsumeMouseClick = Input.ConsumeMouseClick
+local IgnoreClicks = Input.IgnoreClicks
+local WidgetHovered = Input.WidgetHovered
+local Construct = Umg.Construct
+local StyleText = Umg.StyleText
+local SetLabelText = Umg.SetLabelText
+local AddSpacer = Umg.AddSpacer
+local CreateLabeledToggle = Umg.CreateLabeledToggle
+local CreateTextButton = Umg.CreateTextButton
+local NormalizeOptions = Options.NormalizeOptions
+local OptionMatchesFilter = Options.OptionMatchesFilter
+local GetWidgetPlainText = Options.GetWidgetPlainText
 
 local SUPPORTED_TYPES = {
     checkbox = true,
@@ -90,84 +108,6 @@ local liveControls = {} ---@type table[]
 --- Callbacks fired after the menu finishes opening (feature modules use for lazy init).
 local onOpenCallbacks = {} ---@type function[]
 
-local function Log(msg)
-    print(string.format("[%s] %s\n", LIB_NAME, tostring(msg)))
-end
-
-local function IsValid(obj)
-    return obj ~= nil and type(obj.IsValid) == "function" and obj:IsValid()
-end
-
---- ComboBoxString returns FString userdata — normalize before compare/store.
-local function ToPlainString(value)
-    if value == nil then
-        return nil
-    end
-    if type(value) == "string" then
-        return value
-    end
-    if type(value) == "userdata" or type(value) == "table" then
-        if value.ToString then
-            local ok, s = pcall(function()
-                return value:ToString()
-            end)
-            if ok and type(s) == "string" then
-                return s
-            end
-        end
-    end
-    local s = tostring(value)
-    -- Avoid storing "FString: 0000..." pointer junk as a real value.
-    if string.find(s, "FString:", 1, true) == 1 then
-        return nil
-    end
-    return s
-end
-
-local function ValueKey(sectionId, itemId)
-    return tostring(sectionId) .. "." .. tostring(itemId)
-end
-
-local function SafeCall(fn, ...)
-    if type(fn) ~= "function" then
-        return
-    end
-    local ok, err = pcall(fn, ...)
-    if not ok then
-        Log("callback error: " .. tostring(err))
-    end
-end
-
-local function InstallMouseClickLatch()
-    if mouseBindInstalled then
-        return
-    end
-    mouseBindInstalled = true
-    RegisterKeyBind(Key.LEFT_MOUSE_BUTTON, function()
-        if menuOpen then
-            mouseClickLatch = true
-        end
-    end)
-end
-
-local function ConsumeMouseClick()
-    if clickIgnore > 0 then
-        clickIgnore = clickIgnore - 1
-        mouseClickLatch = false
-        return false
-    end
-    if not mouseClickLatch then
-        return false
-    end
-    mouseClickLatch = false
-    return true
-end
-
-local function IgnoreClicks(n)
-    clickIgnore = math.max(clickIgnore, n or 2)
-    mouseClickLatch = false
-end
-
 local function EnsureMenuVisible()
     if menuOpen and IsValid(menuRoot) then
         pcall(function()
@@ -186,99 +126,11 @@ local function IsMenuVisible()
     return ok and vis == VIS_VISIBLE
 end
 
-local function WidgetHovered(widget)
-    if widget == nil then
-        return false
-    end
-    local ok, hovered = pcall(function()
-        if type(widget.IsValid) == "function" and not widget:IsValid() then
-            return false
-        end
-        return widget:IsHovered()
-    end)
-    return ok and hovered == true
-end
-
-local function FindClass(path)
-    local cls = StaticFindObject(path)
-    if not IsValid(cls) then
-        error("StaticFindObject failed: " .. path)
-    end
-    return cls
-end
-
-local function Construct(classPath, outer, name)
-    local cls = FindClass(classPath)
-    local obj = StaticConstructObject(cls, outer, FName(name))
-    if not IsValid(obj) then
-        error("StaticConstructObject failed: " .. classPath .. " as " .. name)
-    end
-    return obj
-end
-
-local function StyleText(textBlock, size, color)
-    color = color or { R = 0.95, G = 0.95, B = 0.98, A = 1.0 }
-    pcall(function()
-        if textBlock.Font then
-            textBlock.Font.Size = size or config.fontItem
-        end
-        textBlock:SetColorAndOpacity({
-            SpecifiedColor = color,
-            ColorUseRule = 0,
-        })
-    end)
-end
-
---- Do not gate on IsValid() — child TextBlocks inside Buttons often report invalid.
-local function SetLabelText(textBlock, str)
-    if textBlock == nil then
-        return false
-    end
-    local ok = pcall(function()
-        textBlock:SetText(FText(tostring(str)))
-    end)
-    return ok == true
-end
-
 local function CheckboxCaption(item, isOn)
     if item.showState == false then
         return item.label
     end
     return string.format("%s: %s", item.label, isOn and "ON" or "OFF")
-end
-
---- Normalize dropdown options into { {label, value}, ... } plus lookup maps.
---- Labels/values are forced to plain Lua strings so lang + category behave identically.
-local function NormalizeOptions(options)
-    local list = {}
-    local labelToValue = {}
-    local valueToLabel = {}
-    for _, opt in ipairs(options or {}) do
-        if type(opt) == "string" then
-            local s = ToPlainString(opt) or opt
-            table.insert(list, { label = s, value = s })
-            labelToValue[s] = s
-            valueToLabel[s] = s
-        elseif type(opt) == "table" then
-            local value = opt.value
-            local label = opt.label
-            if value == nil and label == nil then
-                error("dropdown option needs .label or .value")
-            end
-            if label == nil then
-                label = value
-            end
-            if value == nil then
-                value = label
-            end
-            label = ToPlainString(label) or tostring(label)
-            value = ToPlainString(value) or tostring(value)
-            table.insert(list, { label = label, value = value })
-            labelToValue[label] = value
-            valueToLabel[value] = label
-        end
-    end
-    return list, labelToValue, valueToLabel
 end
 
 local function ValidateItem(item, sectionId, index)
@@ -456,36 +308,6 @@ local function SetDockInternal(side)
     Log("Dock -> " .. config.dock)
 end
 
-local function AddSpacer(parent, name, height)
-    local spacer = Construct("/Script/UMG.Spacer", parent, name)
-    pcall(function()
-        spacer:SetSize({ X = 1, Y = height or 12 })
-    end)
-    parent:AddChildToVerticalBox(spacer)
-end
-
-local function CreateLabeledToggle(outer, namePrefix, caption, initialChecked)
-    local check = Construct("/Script/UMG.CheckBox", outer, namePrefix .. "_Check")
-    local label = Construct("/Script/UMG.TextBlock", check, namePrefix .. "_Label")
-    StyleText(label, config.fontItem)
-    SetLabelText(label, caption)
-    check:SetContent(label)
-    check:SetIsChecked(initialChecked and true or false)
-    return check, label
-end
-
-local function CreateTextButton(outer, namePrefix, caption, bgColor, textColor, fontSize)
-    local button = Construct("/Script/UMG.Button", outer, namePrefix .. "_Btn")
-    local label = Construct("/Script/UMG.TextBlock", button, namePrefix .. "_BtnLabel")
-    StyleText(label, fontSize or config.fontItem, textColor)
-    SetLabelText(label, caption)
-    pcall(function()
-        button:SetContent(label)
-        button:SetBackgroundColor(bgColor or { R = 0.18, G = 0.22, B = 0.32, A = 1.0 })
-    end)
-    return button, label
-end
-
 local LIGHT_ROW_BG = { R = 0.88, G = 0.90, B = 0.94, A = 1.0 }
 local LIGHT_ROW_TEXT = { R = 0.06, G = 0.07, B = 0.10, A = 1.0 }
 local HEADER_BG = { R = 0.22, G = 0.28, B = 0.40, A = 1.0 }
@@ -494,28 +316,6 @@ local HEADER_TEXT = { R = 0.98, G = 0.98, B = 1.0, A = 1.0 }
 local DROPDOWN_LIST_MAX_HEIGHT = 320
 --- Soft cap so a full unfiltered DB cannot spawn thousands of buttons at once.
 local DROPDOWN_SEARCHABLE_MAX_ROWS = 400
-
-local function GetWidgetPlainText(widget)
-    if widget == nil then
-        return ""
-    end
-    local ok, text = pcall(function()
-        return widget:GetText()
-    end)
-    if not ok or text == nil then
-        return ""
-    end
-    return ToPlainString(text) or tostring(text) or ""
-end
-
-local function OptionMatchesFilter(label, filter)
-    if filter == nil or filter == "" then
-        return true
-    end
-    local hay = string.lower(tostring(label or ""))
-    local needle = string.lower(tostring(filter))
-    return string.find(hay, needle, 1, true) ~= nil
-end
 
 --- Rebuild visible option rows (full list for plain dropdowns; filtered cap for searchable).
 local function RebuildDropdownRows(ctrl)
@@ -1189,7 +989,7 @@ end
 
 local function CloseInternal()
     StopPoll()
-    mouseClickLatch = false
+    Input.ClearClickState()
     CollapseAllDropdowns(nil)
     if IsValid(menuRoot) then
         menuRoot:SetVisibility(VIS_COLLAPSED)
@@ -1265,9 +1065,12 @@ function ModMenu.Init(opts)
         config.keyHint = config.keyHint or "F6"
     end
 
+    Umg.SetDefaults({ fontItem = config.fontItem })
     InstallHooks()
     BindToggleKey()
-    InstallMouseClickLatch()
+    Input.InstallMouseClickLatch(function()
+        return menuOpen == true
+    end)
     initialized = true
     -- Re-apply dock if shell already exists (Init can be called again).
     ApplyPercentLayout(panelSlot)
@@ -1336,8 +1139,7 @@ function ModMenu.Register(section)
                 if EnsureShell() then
                     BuildContent()
                     EnsureMenuVisible()
-                    mouseClickLatch = false
-                    clickIgnore = 0
+                    Input.ClearClickState()
                 end
             end)
             if not ok then
@@ -1489,8 +1291,7 @@ function ModMenu.SetOptions(sectionId, itemId, options, selectedValue)
                         if EnsureShell() then
                             BuildContent()
                             EnsureMenuVisible()
-                            mouseClickLatch = false
-                            clickIgnore = 0
+                            Input.ClearClickState()
                         end
                     end)
                     if not ok then
