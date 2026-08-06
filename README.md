@@ -368,9 +368,3 @@ ModMenu.Register({
 Ship `MyCheatMenu/` **and** ensure players already have (or you bundle) `Mods/shared/ModMenu/ModMenu.lua`.
 
 ---
-
-## See also
-
-- Host: `Mods/DevToolsMasterMod/Scripts/main.lua`
-- Simple section: `Mods/DevToolsMasterMod/Scripts/maxrank.lua`
-- Dynamic searchable section: `Mods/DevToolsMasterMod/Scripts/items.lua`
