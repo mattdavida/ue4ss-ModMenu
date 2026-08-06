@@ -111,13 +111,22 @@ v1 shipped / committed on `main`; safe rollback point.
 
 **Gate:** full DevTools smoke pass (in-game).
 
-### Phase 2 — Extract widgets (behavior-preserving)
+### Phase 2 — Extract widgets (behavior-preserving) ✅ done
 
-Order: separator → label → button → checkbox → dropdown (biggest last).
+```
+widgets/
+  init.lua          — registry
+  separator.lua
+  label.lua
+  button.lua
+  checkbox.lua
+  dropdown.lua      — create / poll / apply / refreshLive / collapseAll
+```
 
-Refactor `BuildContent` / `PollControls` to dispatch via `Widgets.get(item.type)`.
+`BuildContent` / `PollControls` / `Register` seed / `Set` / `SetLabel` / `SetOptions` dispatch via `Widgets.get(...)`.
+`ModMenu.lua` ~840 lines (shell + public API).
 
-**Gate:** same smoke + category `SetOptions` + language re-Register.
+**Gate:** same smoke + category `SetOptions` + language re-Register (in-game).
 
 ### Phase 3 — Cleanup & docs
 
