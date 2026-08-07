@@ -58,6 +58,29 @@ function M.SetLabelText(textBlock, str)
     return ok == true
 end
 
+--- Soft-wrap TextBlock to its laid-out width (needed for long hint / status labels).
+function M.EnableAutoWrap(textBlock)
+    if textBlock == nil then
+        return
+    end
+    pcall(function()
+        textBlock:SetAutoWrapText(true)
+    end)
+    pcall(function()
+        textBlock.AutoWrapText = true
+    end)
+end
+
+--- HAlign_Fill so AutoWrapText uses the panel width instead of desired (unwrapped) width.
+function M.FillVerticalSlot(slot)
+    if slot == nil then
+        return
+    end
+    pcall(function()
+        slot:SetHorizontalAlignment(0) -- EHorizontalAlignment::HAlign_Fill
+    end)
+end
+
 function M.AddSpacer(parent, name, height)
     local spacer = M.Construct("/Script/UMG.Spacer", parent, name)
     pcall(function()
