@@ -2,9 +2,9 @@
 
 ModMenu is a lightweight UI framework for UE4SS Lua mods that lets feature modules register reusable in-game settings panels without each mod reimplementing its own ImGui or UMG shell.
 
-![Dev Tools host using ModMenu](GithubAssets/DevToolsMasterMod.png)
+![Two ModMenu panels — Dev Tools (F6, left) and TestMod (F7, right)](GithubAssets/ModMenuHero.png)
 
-*Example: `DevToolsMasterMod` — F6 in-game panel built with ModMenu (Beast of Reincarnation).*
+*Beast of Reincarnation: `DevToolsMasterMod` (F6, left) and `TestMod` (F7, right) — two independent ModMenu shells in one session.*
 
 Each **enabled Lua mod** that calls `Init` gets its own panel + hotkey. Feature modules **register sections** into that mod’s shell.
 
