@@ -14,28 +14,22 @@ Example hosts (not in this repo — live under a game’s `ue4ss/Mods/`): `DevTo
 
 ---
 
-## Layout on disk
+## Install (players / Nexus)
+
+Build from this repo:
+
+```bash
+npm run deploy
+```
+
+Extract `dist/ModMenu.zip` into `ue4ss/Mods/`. No rename — the zip already contains the correct path:
 
 ```
 ue4ss/Mods/
   shared/
     ModMenu/
-      ModMenu.lua           ← public API + shell
-      core/                 ← util, umg, input, options
-        util.lua
-        umg.lua
-        input.lua
-        options.lua
-      widgets/              ← one module per item type + registry
-        init.lua
-        separator.lua
-        label.lua
-        button.lua
-        checkbox.lua
-        dropdown.lua
-      README.md
-      GithubAssets/         ← screenshots for docs (optional)
-    UEHelpers/              ← already required by UE4SS layouts
+      ModMenu.lua           ← bundled runtime (from ModMenu.zip)
+    UEHelpers/              ← already part of normal UE4SS layouts
   YourHostMod/
     enabled.txt
     Scripts/
@@ -49,20 +43,26 @@ Require path (same style as UEHelpers):
 local ModMenu = require("ModMenu.ModMenu")
 ```
 
-The host mod must be enabled (`enabled.txt` / `mods.txt`). The `shared/ModMenu` folder is loaded via `require`; it is not a separate enabled mod.
+The host mod must be enabled (`enabled.txt` / `mods.txt`). ModMenu is loaded via `require` from `shared/`; it is not a separate enabled mod.
 
-### Player / Nexus zip (runtime only)
+Also produced for tooling: `dist/ModMenu.bundle.lua` and `dist/release/shared/ModMenu/ModMenu.lua`.  
+`UEHelpers` is **not** bundled — leave the stock UE4SS copy under `Mods/shared/`.  
+Omit this repo’s `README.md` / `GithubAssets/` from player zips (use Nexus gallery images instead).
 
-Ship the host **and** the ModMenu runtime tree. Omit docs and screenshots:
+### Source layout (contributors)
+
+Development uses the multi-file tree (what you edit in this repo):
 
 ```
-Mods/YourHostMod/
-Mods/shared/ModMenu/ModMenu.lua
-Mods/shared/ModMenu/core/*.lua
-Mods/shared/ModMenu/widgets/*.lua
+ModMenu.lua                 ← public API + shell
+core/                       ← util, umg, input, options
+widgets/                    ← one module per item type + registry
+tools/
+  bundle.mjs                ← npm run bundle
+  deploy.mjs                ← npm run deploy → dist/ModMenu.zip
 ```
 
-Do **not** require `README.md` or `GithubAssets/` in the zip (use gallery images on Nexus instead).
+When adding a widget or core module, register it in `tools/bundle.mjs` (`MODULES`) so releases stay complete.
 
 ---
 
@@ -281,8 +281,9 @@ Dropdown also exposes helpers used by the shell (`refreshLive`, `collapseAll`, �
 
 1. Create `widgets/<type>.lua` implementing the contract (copy `button.lua` or `checkbox.lua`).
 2. `register(require("ModMenu.widgets.<type>"))` in `widgets/init.lua`.
-3. Document fields under **Item types** below.
-4. Smoke-test via a host `Register` section.
+3. Add the module to `MODULES` in `tools/bundle.mjs`.
+4. Document fields under **Item types** below.
+5. Smoke-test via a host `Register` section, then `npm run deploy`.
 
 Natural follow-ons (not required for hosts): tabbed sections, `textinput`, `slider` / `number` widgets — same contract as above.
 
@@ -457,12 +458,13 @@ ModMenu.Register({
 })
 ```
 
-Ship `MyCheatMenu/` **and** the full ModMenu runtime (`ModMenu.lua` + `core/` + `widgets/`). See **Player / Nexus zip** above.
+Ship `MyCheatMenu/` plus ModMenu from `npm run deploy` (`dist/ModMenu.zip` → extract into `ue4ss/Mods/`). See **Install** above.
 
 ---
 
 ## See also
 
+- Install / Nexus zip: `npm run deploy` → `dist/ModMenu.zip`
 - Widget registry: `widgets/init.lua`
 - Public API / shell: `ModMenu.lua`
 - Example game hosts (external): `DevToolsMasterMod` (multi-section), `TestMod` (minimal + key-conflict smoke flag)

@@ -1,0 +1,9 @@
+{
+  "name": "modmenu",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bundle": "node tools/bundle.mjs",
+    "deploy": "node tools/deploy.mjs"
+  }
+}
