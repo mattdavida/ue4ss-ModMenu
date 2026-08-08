@@ -24,7 +24,10 @@
     })
     ModMenu.SetDock("left") -- or Init({ dock = "left" })
 
-  Singleton shell: one panel / one hotkey; mods Register sections into it.
+  Per-mod shell: each Lua mod that Init()s gets its own panel + hotkey.
+  UObject names / viewport Z are allocated via ModRef shared vars so two mods
+  never collide on ModMenu_Root_1 under the same GameInstance.
+
   Dock presets: Left / Right via header button (session only; no free drag).
 
   Internals: core/ helpers + widgets/ registry (see README.md).
@@ -40,11 +43,17 @@ local Dropdown = Widgets.get("dropdown")
 
 local ModMenu = {}
 
-local VIEWPORT_Z = 1000
+local VIEWPORT_Z_BASE = 1000
 local POLL_MS = 50
 
 local VIS_VISIBLE = 0
 local VIS_COLLAPSED = 1
+
+--- Process-wide keys (ModRef shared vars). Survive hot-reload; do not store tables/functions.
+local SHARED_NEXT_INSTANCE = "ModMenu.NextInstanceId"
+local SHARED_OPEN_COUNT = "ModMenu.OpenCount"
+--- Claim map: ModMenu.KeyClaim.<keyHint> -> instanceTag (string). Warn-only on clash.
+local SHARED_KEY_CLAIM_PREFIX = "ModMenu.KeyClaim."
 
 -- Local aliases for shell chrome / public API.
 local Log = Util.Log
@@ -74,6 +83,7 @@ local config = {
     fontItem = 24,
     fontSection = 26,
     fontDropdown = 22,
+    instanceId = nil, -- optional human tag for FNames / Live View (e.g. "TestMod")
 }
 
 local sections = {} ---@type table[]
@@ -92,11 +102,117 @@ local initialized = false
 local hooksInstalled = false
 local keyBound = false
 
+--- Stable per Lua-state ModMenu; allocated once via ModRef (or opts.instanceId).
+local instanceSerial = nil ---@type integer?
+local instanceTag = nil ---@type string?
+local viewportZ = VIEWPORT_Z_BASE
+--- True while this instance has incremented SHARED_OPEN_COUNT.
+local openCountHeld = false
+
 --- Runtime widgets rebuilt each Open / Register-while-open.
 local liveControls = {} ---@type table[]
 
 --- Callbacks fired after the menu finishes opening (feature modules use for lazy init).
 local onOpenCallbacks = {} ---@type function[]
+
+local function SharedGet(name)
+    if ModRef == nil then
+        return nil
+    end
+    local ok, value = pcall(function()
+        return ModRef:GetSharedVariable(name)
+    end)
+    if ok then
+        return value
+    end
+    return nil
+end
+
+local function SharedSet(name, value)
+    if ModRef == nil then
+        return false
+    end
+    local ok = pcall(function()
+        ModRef:SetSharedVariable(name, value)
+    end)
+    return ok == true
+end
+
+local function SanitizeTag(raw)
+    local s = tostring(raw or "mod"):gsub("[^%w_]", "_")
+    if s == "" then
+        s = "mod"
+    end
+    -- FName-friendly length; keep Live View readable.
+    if #s > 48 then
+        s = string.sub(s, 1, 48)
+    end
+    return s
+end
+
+--- Allocate a process-wide instance id so UObject names never collide across mods.
+local function EnsureInstanceIdentity()
+    if instanceSerial ~= nil and instanceTag ~= nil then
+        return
+    end
+
+    local nextId = SharedGet(SHARED_NEXT_INSTANCE)
+    if type(nextId) ~= "number" then
+        nextId = 0
+    end
+    nextId = nextId + 1
+    if not SharedSet(SHARED_NEXT_INSTANCE, nextId) then
+        -- No ModRef (unexpected): fall back to a local-only id (single-mod safe).
+        nextId = (createAttempts > 0 and createAttempts or 1)
+        Log("WARNING: ModRef shared vars unavailable — instance id may collide across mods")
+    end
+    instanceSerial = nextId
+
+    local tag = config.instanceId
+    if tag == nil or tostring(tag) == "" then
+        tag = "i" .. tostring(instanceSerial)
+    end
+    instanceTag = SanitizeTag(tag)
+    viewportZ = VIEWPORT_Z_BASE + (instanceSerial - 1)
+
+    Log(string.format(
+        "Instance identity serial=%d tag=%q viewportZ=%d",
+        instanceSerial,
+        instanceTag,
+        viewportZ
+    ))
+end
+
+local function ShellNameSuffix()
+    EnsureInstanceIdentity()
+    return string.format("%s_%d", instanceTag, createAttempts)
+end
+
+local function AdjustOpenCount(delta)
+    local n = SharedGet(SHARED_OPEN_COUNT)
+    if type(n) ~= "number" then
+        n = 0
+    end
+    n = math.max(0, n + delta)
+    SharedSet(SHARED_OPEN_COUNT, n)
+    return n
+end
+
+local function NoteMenuOpened()
+    if openCountHeld then
+        return
+    end
+    AdjustOpenCount(1)
+    openCountHeld = true
+end
+
+local function NoteMenuClosed()
+    if not openCountHeld then
+        return AdjustOpenCount(0)
+    end
+    openCountHeld = false
+    return AdjustOpenCount(-1)
+end
 
 local function EnsureMenuVisible()
     if menuOpen and IsValid(menuRoot) then
@@ -156,12 +272,14 @@ local function StopPoll()
 end
 
 --- Show software cursor + GameAndUI (the mode that worked — white cursor).
-local function SetMenuInputActive(active)
+--- On deactivate: only return to GameOnly when no other ModMenu instance is open.
+---@param active boolean
+---@param remainingOpenCount integer|nil when deactivating, open count after this instance released
+local function SetMenuInputActive(active, remainingOpenCount)
     local pc = UEHelpers.GetPlayerController()
     if not IsValid(pc) then
         return
     end
-    pc.bShowMouseCursor = active and true or false
 
     local ok, err = pcall(function()
         local lib = StaticFindObject("/Script/UMG.Default__WidgetBlueprintLibrary")
@@ -169,9 +287,23 @@ local function SetMenuInputActive(active)
             return
         end
         if active then
+            pc.bShowMouseCursor = true
             -- EMouseLockMode::DoNotLock = 0
             lib:SetInputMode_GameAndUIEx(pc, menuRoot, 0, false, false)
         else
+            local others = remainingOpenCount
+            if type(others) ~= "number" then
+                others = SharedGet(SHARED_OPEN_COUNT)
+                if type(others) ~= "number" then
+                    others = 0
+                end
+            end
+            if others > 0 then
+                -- Another mod's shell still open — do not yank GameAndUI / cursor.
+                pc.bShowMouseCursor = true
+                return
+            end
+            pc.bShowMouseCursor = false
             lib:SetInputMode_GameOnly(pc, false)
         end
     end)
@@ -277,6 +409,7 @@ end
 
 local function DestroyShell()
     StopPoll()
+    local remaining = NoteMenuClosed()
     if IsValid(menuRoot) then
         pcall(function()
             menuRoot:RemoveFromParent()
@@ -290,6 +423,7 @@ local function DestroyShell()
     panelSlot = nil
     liveControls = {}
     menuOpen = false
+    SetMenuInputActive(false, remaining)
 end
 
 local function BuildContent()
@@ -379,8 +513,9 @@ local function BuildContent()
 end
 
 local function CreateShell()
+    EnsureInstanceIdentity()
     createAttempts = createAttempts + 1
-    local suffix = tostring(createAttempts)
+    local suffix = ShellNameSuffix()
 
     local outer = UEHelpers.GetGameInstance()
     if not IsValid(outer) then
@@ -390,6 +525,7 @@ local function CreateShell()
         error("No GameInstance or PlayerController to parent the widget")
     end
 
+    -- Names must be unique under GameInstance across ALL mods (ModRef-backed tag/serial).
     local hud = Construct("/Script/UMG.UserWidget", outer, "ModMenu_Root_" .. suffix)
     local tree = Construct("/Script/UMG.WidgetTree", hud, "ModMenu_Tree_" .. suffix)
     hud.WidgetTree = tree
@@ -412,7 +548,7 @@ local function CreateShell()
         ApplyPercentLayout(slot)
     end
 
-    hud:AddToViewport(VIEWPORT_Z)
+    hud:AddToViewport(viewportZ)
     hud:SetVisibility(VIS_COLLAPSED)
 
     menuRoot = hud
@@ -420,7 +556,9 @@ local function CreateShell()
     BuildContent()
 
     Log(string.format(
-        "Shell ready dock=%s (~%.0f%% x ~%.0f%%). Sections: %d",
+        "Shell ready name=ModMenu_Root_%s z=%d dock=%s (~%.0f%% x ~%.0f%%). Sections: %d",
+        suffix,
+        viewportZ,
         tostring(config.dock),
         config.widthFrac * 100,
         (1.0 - config.topFrac - config.bottomFrac) * 100,
@@ -501,10 +639,11 @@ local function OpenInternal()
     end
     BuildContent()
     menuRoot:SetVisibility(VIS_VISIBLE)
-    SetMenuInputActive(true)
     menuOpen = true
+    NoteMenuOpened()
+    SetMenuInputActive(true)
     StartPoll()
-    Log("OPEN")
+    Log(string.format("OPEN tag=%s", tostring(instanceTag)))
     for _, fn in ipairs(onOpenCallbacks) do
         SafeCall(fn)
     end
@@ -517,9 +656,10 @@ local function CloseInternal()
     if IsValid(menuRoot) then
         menuRoot:SetVisibility(VIS_COLLAPSED)
     end
-    SetMenuInputActive(false)
     menuOpen = false
-    Log("CLOSED")
+    local remaining = NoteMenuClosed()
+    SetMenuInputActive(false, remaining)
+    Log(string.format("CLOSED tag=%s openRemaining=%s", tostring(instanceTag), tostring(remaining)))
 end
 
 local function ToggleInternal()
@@ -549,6 +689,35 @@ local function InstallHooks()
     end)
 end
 
+--- Advertise our toggle key via ModRef so two mods on the same key log a clear clash.
+--- Does not block binding — authors/players decide whether to change keys.
+local function ClaimToggleKey(keyHint)
+    EnsureInstanceIdentity()
+    local hint = tostring(keyHint or "unknown")
+    local claimKey = SHARED_KEY_CLAIM_PREFIX .. hint
+    local owner = SharedGet(claimKey)
+    local me = tostring(instanceTag)
+
+    if type(owner) == "string" and owner ~= "" and owner ~= me then
+        -- Single Log() line (Util.Log already prefixes [ModMenu]).
+        Log(string.format(
+            "KEY CONFLICT: %s already claimed by %q — this menu (%q) shares that bind. "
+                .. "Both may toggle together (ok for same-author dual docks); "
+                .. "unrelated mods should use different keys.",
+            hint,
+            owner,
+            me
+        ))
+    elseif type(owner) == "string" and owner == me then
+        Log(string.format("Key %s already claimed by this instance (%q)", hint, me))
+    else
+        Log(string.format("Key %s claimed by %q", hint, me))
+    end
+
+    -- Last Init wins the registry slot (still useful: next mod sees the latest owner).
+    SharedSet(claimKey, me)
+end
+
 local function BindToggleKey()
     if keyBound then
         return
@@ -558,6 +727,7 @@ local function BindToggleKey()
     if config.keyHint == nil and key == Key.F6 then
         config.keyHint = "F6"
     end
+    ClaimToggleKey(config.keyHint or tostring(key))
     RegisterKeyBind(key, function()
         ExecuteInGameThread(function()
             ToggleInternal()
@@ -566,7 +736,7 @@ local function BindToggleKey()
     keyBound = true
 end
 
---- Initialize / configure the singleton shell. Safe to call multiple times.
+--- Initialize / configure this mod's shell. Safe to call multiple times.
 ---@param opts table|nil
 function ModMenu.Init(opts)
     opts = opts or {}
@@ -582,12 +752,17 @@ function ModMenu.Init(opts)
     if opts.fontHint ~= nil then config.fontHint = opts.fontHint end
     if opts.fontItem ~= nil then config.fontItem = opts.fontItem end
     if opts.fontSection ~= nil then config.fontSection = opts.fontSection end
+    -- Human-readable FName tag (Live View). Locked after first EnsureInstanceIdentity.
+    if opts.instanceId ~= nil and instanceTag == nil then
+        config.instanceId = opts.instanceId
+    end
 
     if config.key == nil then
         config.key = Key.F6
         config.keyHint = config.keyHint or "F6"
     end
 
+    EnsureInstanceIdentity()
     Umg.SetDefaults({ fontItem = config.fontItem })
     InstallHooks()
     BindToggleKey()
@@ -599,11 +774,25 @@ function ModMenu.Init(opts)
     ApplyPercentLayout(panelSlot)
     SyncDockChrome()
     Log(string.format(
-        "Init — title=%q key=%s dock=%s",
+        "Init — title=%q key=%s dock=%s instance=%q serial=%s z=%d",
         tostring(config.title),
         tostring(config.keyHint or config.key),
-        tostring(config.dock)
+        tostring(config.dock),
+        tostring(instanceTag),
+        tostring(instanceSerial),
+        viewportZ
     ))
+end
+
+--- Process-wide instance tag used in UObject names (e.g. ModMenu_Root_TestMod_1).
+---@return string|nil
+function ModMenu.GetInstanceId()
+    return instanceTag
+end
+
+---@return integer|nil
+function ModMenu.GetInstanceSerial()
+    return instanceSerial
 end
 
 --- Pin the panel to the left or right edge (session only; no free drag).

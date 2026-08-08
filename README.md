@@ -6,9 +6,11 @@ ModMenu is a lightweight UI framework for UE4SS Lua mods that lets feature modul
 
 *Example: `DevToolsMasterMod` — F6 in-game panel built with ModMenu (Beast of Reincarnation).*
 
-One panel, one hotkey. Feature modules **register sections** into that shell — they do not each create their own UI.
+Each **enabled Lua mod** that calls `Init` gets its own panel + hotkey. Feature modules **register sections** into that mod’s shell.
 
-Reference host: `Mods/DevToolsMasterMod/`
+UObject names are unique across mods via `ModRef` shared vars (see `instanceId`), so two mods can both ship a ModMenu without stealing `ModMenu_Root_1`.
+
+Example hosts (not in this repo — live under a game’s `ue4ss/Mods/`): `DevToolsMasterMod` (F6), `TestMod` (F7).
 
 ---
 
@@ -66,7 +68,8 @@ Do **not** require `README.md` or `GithubAssets/` in the zip (use gallery images
 
 ## Recommended pattern
 
-**One host mod owns the shell.** Feature scripts only call `Register` / `Get` / `Set` / etc.
+**Within one mod:** that mod owns one shell; feature scripts only call `Register` / `Get` / `Set` / etc.  
+**Across mods:** each enabled Lua mod may `Init` its own independent shell (separate hotkey / dock / `instanceId`).
 
 ### Host — `Scripts/main.lua`
 
@@ -76,6 +79,7 @@ local MyFeature = require("myfeature")
 
 ModMenu.Init({
     title = "My Mod Menu",
+    instanceId = "YourHostMod", -- unique FName tag (Live View: ModMenu_Root_YourHostMod_1)
     key = Key.F6,
     keyHint = "F6",
     dock = "left", -- "left" | "right"
@@ -85,6 +89,10 @@ MyFeature.RegisterMenu(ModMenu)
 
 print("[YourHostMod] Loaded — F6 opens menu")
 ```
+
+Use a **different toggle key** per mod if several menus may run together (e.g. F6 + F7).
+
+On bind, ModMenu claims `ModMenu.KeyClaim.<keyHint>` via `ModRef`. If another instance already claimed that hint, it logs **KEY CONFLICT** (still binds — warn only). UE4SS may invoke every binder on that key, so same-key menus can open together (handy for same-author left/right docks; risky for unrelated mods).
 
 ### Feature — `Scripts/myfeature.lua`
 
@@ -147,7 +155,9 @@ return M
 | Feature module | Own section `id`, items, callbacks, game calls |
 | ModMenu | Draw panel, input, values store, dock |
 
-Shipping extra cheats later = add another `*.lua` + one `RegisterMenu` call in the host. Do **not** publish a second mod that also `Init`s a different hotkey unless you intentionally want a second shell (not supported as two independent panels today — ModMenu is a singleton).
+Shipping extra cheats later = add another `*.lua` + one `RegisterMenu` call in the host.
+
+**Multi-mod:** any number of mods may `Init` their own shell. Each gets a process-wide instance serial (`ModMenu.NextInstanceId` shared var) and optional `instanceId` tag so Live View shows distinct roots (`ModMenu_Root_DevTools_1`, `ModMenu_Root_TestMod_1`). Closing one menu will not force GameOnly input while another ModMenu is still open.
 
 ---
 
@@ -155,12 +165,13 @@ Shipping extra cheats later = add another `*.lua` + one `RegisterMenu` call in t
 
 ### `ModMenu.Init(opts?)`
 
-Configure and bind the singleton. Safe to call more than once (updates config).
+Configure and bind this mod’s shell. Safe to call more than once (updates config).
 
 | Option | Default | Notes |
 |--------|---------|--------|
 | `title` | `"Mod Menu"` | Header title |
-| `key` | `Key.F6` | Toggle key |
+| `instanceId` | `"iN"` | FName tag; set once before first shell create (e.g. `"TestMod"`) |
+| `key` | `Key.F6` | Toggle key (use a unique key per mod) |
 | `keyHint` | `"F6"` | Shown in the header hint |
 | `dock` | `"right"` | `"left"` \| `"right"` |
 | `widthFrac` | `0.32` | Panel width as % of viewport |
@@ -169,6 +180,8 @@ Configure and bind the singleton. Safe to call more than once (updates config).
 | `fontTitle` / `fontHint` / `fontItem` / `fontSection` | 32 / 20 / 24 / 26 | Optional |
 
 Also installs viewport hooks, LMB click latch, and the toggle keybind.
+
+`ModMenu.GetInstanceId()` / `ModMenu.GetInstanceSerial()` — debug helpers for logs / Live View.
 
 ### `ModMenu.Register(section)`
 
@@ -400,13 +413,15 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 
 ## Behaviour notes (for integrators)
 
-1. **Singleton** — one ModMenu instance per process. Multiple hosts both calling `Init` share the same panel; last `Init` options win for title/key/dock.
-2. **Input** — while open, uses GameAndUI + mouse cursor. Clicks use LMB keybind latch + `IsHovered()` (not UE `OnClicked` alone).
-3. **Dock** — left/right presets only (header button + `SetDock`). No free drag. Session only (not saved to disk).
-4. **FNames** — content rebuilds bump an internal generation so widget names stay unique after `ClearChildren`. Prefer `SetOptions` on searchable lists over constant full rebuilds.
-5. **Large lists** — keep `maxVisible` bounded; filter narrows the working set. Building thousands of UButtons at once is risky.
-6. **Game readiness** — many game objects only exist after a save is loaded; surface that in a status `label` and/or `OnOpen` retry.
-7. **Callbacks** — errors inside `onClick` / `onChange` are caught and logged as `[ModMenu] callback error: ...`.
+1. **Per-mod shell** — each Lua mod has its own ModMenu state (`require` is not shared across mods). Multiple mods may each `Init` an independent panel. UObject roots are named `ModMenu_Root_<instanceId>_<n>` using a `ModRef` serial (`ModMenu.NextInstanceId`) so they never collide under `GameInstance`.
+2. **Toggle keys** — prefer a unique `key` / `keyHint` per mod. Claims are stored as `ModMenu.KeyClaim.<keyHint>`; clashes log **KEY CONFLICT**. UE4SS may fire every binder on that key (both menus toggle — useful for same-author dual docks, confusing for unrelated mods).
+3. **Input** — while open, uses GameAndUI + mouse cursor. Clicks use LMB keybind latch + `IsHovered()` (not UE `OnClicked` alone). Closing one menu does not force GameOnly while another ModMenu is still open (`ModMenu.OpenCount`).
+4. **Dock** — left/right presets only (header button + `SetDock`). No free drag. Session only (not saved to disk).
+5. **FNames** — shell names include `instanceId`; content rebuilds bump an internal generation after `ClearChildren`. Prefer `SetOptions` on searchable lists over constant full rebuilds.
+6. **Large lists** — keep `maxVisible` bounded; filter narrows the working set. Building thousands of UButtons at once is risky.
+7. **Game readiness** — many game objects only exist after a save is loaded; surface that in a status `label` and/or `OnOpen` retry.
+8. **Callbacks** — errors inside `onClick` / `onChange` are caught and logged as `[ModMenu] callback error: ...`.
+9. **Hot-reload** — `ModRef` shared vars (`NextInstanceId`, key claims, open count) are **not** cleared on Ctrl+R.
 
 ---
 
@@ -418,7 +433,13 @@ If you only need one section and no feature files:
 -- Mods/MyCheatMenu/Scripts/main.lua
 local ModMenu = require("ModMenu.ModMenu")
 
-ModMenu.Init({ title = "My Cheats", key = Key.F7, keyHint = "F7", dock = "right" })
+ModMenu.Init({
+    title = "My Cheats",
+    instanceId = "MyCheatMenu",
+    key = Key.F7,
+    keyHint = "F7",
+    dock = "right",
+})
 
 ModMenu.Register({
     id = "Cheats",
@@ -442,7 +463,6 @@ Ship `MyCheatMenu/` **and** the full ModMenu runtime (`ModMenu.lua` + `core/` + 
 
 ## See also
 
-- Host: `Mods/DevToolsMasterMod/Scripts/main.lua`
-- Simple section: `Mods/DevToolsMasterMod/Scripts/maxrank.lua`
-- Dynamic searchable section: `Mods/DevToolsMasterMod/Scripts/items.lua`
 - Widget registry: `widgets/init.lua`
+- Public API / shell: `ModMenu.lua`
+- Example game hosts (external): `DevToolsMasterMod` (multi-section), `TestMod` (minimal + key-conflict smoke flag)
