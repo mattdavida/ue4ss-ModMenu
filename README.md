@@ -178,8 +178,28 @@ Configure and bind this mod’s shell. Safe to call more than once (updates conf
 | `topFrac` / `bottomFrac` | `0.05` | Vertical margins |
 | `rightFrac` | `0.01` | Edge margin (both docks) |
 | `fontTitle` / `fontHint` / `fontItem` / `fontSection` | 32 / 20 / 24 / 26 | Optional |
+| `canOpen` | `nil` | Optional `function(): boolean` or `false, "reason"`. Gates **open** (key toggle + `ModMenu.Open`); close is never gated. Pass `false` on a later `Init` to clear. |
 
 Also installs viewport hooks, LMB click latch, and the toggle keybind.
+
+```lua
+-- Keep F7 bound, but only open when another menu allows it:
+ModMenu.Init({
+    title = "Dev Tools",
+    key = Key.F7,
+    keyHint = "F7",
+    canOpen = function()
+        if not cheatMenuOpen then
+            return false, "Open the cheat menu first"
+        end
+        return true
+    end,
+})
+
+-- Host can still drive the shell explicitly:
+--   ModMenu.Open()   -- also respects canOpen
+--   ModMenu.Close()  -- always allowed
+```
 
 `ModMenu.GetInstanceId()` / `ModMenu.GetInstanceSerial()` — debug helpers for logs / Live View.
 

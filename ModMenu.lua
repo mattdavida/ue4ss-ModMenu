@@ -54,6 +54,12 @@ local SHARED_NEXT_INSTANCE = "ModMenu.NextInstanceId"
 local SHARED_OPEN_COUNT = "ModMenu.OpenCount"
 --- Claim map: ModMenu.KeyClaim.<keyHint> -> instanceTag (string). Warn-only on clash.
 local SHARED_KEY_CLAIM_PREFIX = "ModMenu.KeyClaim."
+--- Stashed PlayerController input flags while any ModMenu is open (scalars only — ModRef).
+local SHARED_INPUT_SAVED = "ModMenu.InputSaved"
+local SHARED_SAVED_SHOW_CURSOR = "ModMenu.Saved.bShowMouseCursor"
+local SHARED_SAVED_CLICK = "ModMenu.Saved.bEnableClickEvents"
+local SHARED_SAVED_HOVER = "ModMenu.Saved.bEnableMouseOverEvents"
+local SHARED_SAVED_LOOK_BUMP = "ModMenu.Saved.LookIgnoreBump"
 
 -- Local aliases for shell chrome / public API.
 local Log = Util.Log
@@ -84,6 +90,7 @@ local config = {
     fontSection = 26,
     fontDropdown = 22,
     instanceId = nil, -- optional human tag for FNames / Live View (e.g. "TestMod")
+    canOpen = nil, -- optional fun(): boolean|boolean,string — gate Open / key toggle open
 }
 
 local sections = {} ---@type table[]
@@ -271,6 +278,108 @@ local function StopPoll()
     end
 end
 
+-- UE5 added trailing bFlushInput to SetInputMode_*; UE4.27 rejects the extra arg.
+-- Cache after first successful call so we don't pcall-probe every open/close.
+local inputModeFlushArity = nil ---@type "withFlush"|"noFlush"|nil
+
+--- GameAndUI with DoNotLock; try UE5 (5 args) then UE4 (4 args).
+local function ApplyGameAndUI(lib, pc)
+    -- EMouseLockMode::DoNotLock = 0
+    if inputModeFlushArity == "withFlush" then
+        lib:SetInputMode_GameAndUIEx(pc, menuRoot, 0, false, false)
+        return
+    end
+    if inputModeFlushArity == "noFlush" then
+        lib:SetInputMode_GameAndUIEx(pc, menuRoot, 0, false)
+        return
+    end
+    local ok = pcall(function()
+        lib:SetInputMode_GameAndUIEx(pc, menuRoot, 0, false, false)
+    end)
+    if ok then
+        inputModeFlushArity = "withFlush"
+        return
+    end
+    lib:SetInputMode_GameAndUIEx(pc, menuRoot, 0, false)
+    inputModeFlushArity = "noFlush"
+end
+
+--- GameOnly; try UE5 (pc + flush) then UE4 (pc only).
+local function ApplyGameOnly(lib, pc)
+    if inputModeFlushArity == "withFlush" then
+        lib:SetInputMode_GameOnly(pc, false)
+        return
+    end
+    if inputModeFlushArity == "noFlush" then
+        lib:SetInputMode_GameOnly(pc)
+        return
+    end
+    local ok = pcall(function()
+        lib:SetInputMode_GameOnly(pc, false)
+    end)
+    if ok then
+        inputModeFlushArity = "withFlush"
+        return
+    end
+    lib:SetInputMode_GameOnly(pc)
+    inputModeFlushArity = "noFlush"
+end
+
+--- Force a usable cursor for mouse-look games (no default UI cursor).
+--- SetIgnoreLookInput is refcounted in UE. Re-bump if the game clears ignore while open;
+--- if IsLookInputIgnored can't be probed, bump at most once (LOOK_BUMP).
+local function EnsureLookIgnored(pc)
+    local ignored = false
+    local probeOk = pcall(function()
+        ignored = pc:IsLookInputIgnored() == true
+    end)
+    if probeOk then
+        if ignored then
+            return
+        end
+        -- Look not ignored (first open, or game cleared it) — bump and remember for restore.
+    elseif SharedGet(SHARED_SAVED_LOOK_BUMP) == true then
+        return
+    end
+    local ok = pcall(function()
+        pc:SetIgnoreLookInput(true)
+    end)
+    if ok then
+        SharedSet(SHARED_SAVED_LOOK_BUMP, true)
+    end
+end
+
+local function ForceMenuCursor(pc)
+    if SharedGet(SHARED_INPUT_SAVED) ~= true then
+        SharedSet(SHARED_SAVED_SHOW_CURSOR, pc.bShowMouseCursor == true)
+        SharedSet(SHARED_SAVED_CLICK, pc.bEnableClickEvents == true)
+        SharedSet(SHARED_SAVED_HOVER, pc.bEnableMouseOverEvents == true)
+        SharedSet(SHARED_INPUT_SAVED, true)
+    end
+    pc.bShowMouseCursor = true
+    pc.bEnableClickEvents = true
+    pc.bEnableMouseOverEvents = true
+    EnsureLookIgnored(pc)
+end
+
+--- Restore PlayerController cursor/look flags when the last ModMenu closes.
+local function RestoreMenuCursor(pc)
+    if SharedGet(SHARED_INPUT_SAVED) ~= true then
+        pc.bShowMouseCursor = false
+        return
+    end
+    pc.bShowMouseCursor = SharedGet(SHARED_SAVED_SHOW_CURSOR) == true
+    pc.bEnableClickEvents = SharedGet(SHARED_SAVED_CLICK) == true
+    pc.bEnableMouseOverEvents = SharedGet(SHARED_SAVED_HOVER) == true
+    if SharedGet(SHARED_SAVED_LOOK_BUMP) == true then
+        pcall(function()
+            pc:SetIgnoreLookInput(false)
+        end)
+    end
+    SharedSet(SHARED_INPUT_SAVED, false)
+    SharedSet(SHARED_SAVED_LOOK_BUMP, false)
+end
+
 --- Show software cursor + GameAndUI (the mode that worked — white cursor).
 --- On deactivate: only return to GameOnly when no other ModMenu instance is open.
 ---@param active boolean
@@ -287,9 +396,8 @@ local function SetMenuInputActive(active, remainingOpenCount)
             return
         end
         if active then
-            pc.bShowMouseCursor = true
-            -- EMouseLockMode::DoNotLock = 0
-            lib:SetInputMode_GameAndUIEx(pc, menuRoot, 0, false, false)
+            ForceMenuCursor(pc)
+            ApplyGameAndUI(lib, pc)
         else
             local others = remainingOpenCount
             if type(others) ~= "number" then
@@ -300,11 +408,11 @@ local function SetMenuInputActive(active, remainingOpenCount)
             end
             if others > 0 then
                 -- Another mod's shell still open — do not yank GameAndUI / cursor.
-                pc.bShowMouseCursor = true
+                ForceMenuCursor(pc)
                 return
             end
-            pc.bShowMouseCursor = false
-            lib:SetInputMode_GameOnly(pc, false)
+            RestoreMenuCursor(pc)
+            ApplyGameOnly(lib, pc)
         end
     end)
     if not ok then
@@ -624,16 +732,53 @@ local function StartPoll()
         if not menuOpen then
             return
         end
-        -- Only reclaim when the game hid our cursor (toast/interrupt) — don't spam SetInputMode.
+        -- Reclaim when the game steals cursor / click routing / look-ignore (toast, mouse-look, etc.).
         local pc = UEHelpers.GetPlayerController()
-        if IsValid(pc) and not pc.bShowMouseCursor then
-            ReclaimMenuInput()
+        if IsValid(pc) then
+            local lookOk = true
+            pcall(function()
+                lookOk = pc:IsLookInputIgnored() == true
+            end)
+            if not pc.bShowMouseCursor
+                or not pc.bEnableClickEvents
+                or not pc.bEnableMouseOverEvents
+                or not lookOk
+            then
+                ReclaimMenuInput()
+            end
         end
         PollControls()
     end)
 end
 
-local function OpenInternal()
+--- Host gate for opening (key toggle + ModMenu.Open). Close is never gated.
+---@return boolean allowed
+---@return string|nil reason
+local function EvaluateCanOpen()
+    local fn = config.canOpen
+    if type(fn) ~= "function" then
+        return true
+    end
+    local ok, a, b = pcall(fn)
+    if not ok then
+        return false, tostring(a)
+    end
+    if a == false then
+        return false, (type(b) == "string" and b ~= "") and b or "canOpen returned false"
+    end
+    return true
+end
+
+---@param opts { skipCanOpen?: boolean }|nil
+local function OpenInternal(opts)
+    opts = opts or {}
+    if not opts.skipCanOpen then
+        local allowed, reason = EvaluateCanOpen()
+        if not allowed then
+            Log("OPEN blocked: " .. tostring(reason))
+            return
+        end
+    end
     if not EnsureShell() then
         return
     end
@@ -663,7 +808,7 @@ local function CloseInternal()
 end
 
 local function ToggleInternal()
-    -- If we think we're open but the shell was hidden/broken by a rebuild, recover to open.
+    -- Close is never gated. Open (and recover-to-open) respects canOpen.
     if menuOpen and IsValid(menuRoot) and IsMenuVisible() then
         CloseInternal()
     else
@@ -683,7 +828,8 @@ local function InstallHooks()
             DestroyShell()
             Log("ClientRestart — shell reset")
             if wasOpen then
-                OpenInternal()
+                -- Already-open session: restore without re-checking the host gate.
+                OpenInternal({ skipCanOpen = true })
             end
         end)
     end)
@@ -752,6 +898,12 @@ function ModMenu.Init(opts)
     if opts.fontHint ~= nil then config.fontHint = opts.fontHint end
     if opts.fontItem ~= nil then config.fontItem = opts.fontItem end
     if opts.fontSection ~= nil then config.fontSection = opts.fontSection end
+    if opts.canOpen ~= nil then
+        if opts.canOpen ~= false and type(opts.canOpen) ~= "function" then
+            error("ModMenu.Init: canOpen must be a function or false/nil")
+        end
+        config.canOpen = (type(opts.canOpen) == "function") and opts.canOpen or nil
+    end
     -- Human-readable FName tag (Live View). Locked after first EnsureInstanceIdentity.
     if opts.instanceId ~= nil and instanceTag == nil then
         config.instanceId = opts.instanceId
