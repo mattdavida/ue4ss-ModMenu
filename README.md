@@ -232,6 +232,15 @@ ModMenu.SetLabel(sectionId, itemId, "New text")
 
 Label items need an `id` for this to work.
 
+### Buttons
+
+```lua
+ModMenu.SetButtonLabel(sectionId, itemId, "Scanning...")
+ModMenu.SetButtonEnabled(sectionId, itemId, false)  -- blocks poll clicks + UMG SetIsEnabled
+```
+
+Button items need an `id`. Optional Register field: `enabled = false` (default true).
+
 ### Dropdown options
 
 ```lua
@@ -305,13 +314,13 @@ Dropdown also exposes helpers used by the shell (`refreshLive`, `collapseAll`, �
 4. Document fields under **Item types** below.
 5. Smoke-test via a host `Register` section, then `npm run deploy`.
 
-Natural follow-ons (not required for hosts): tabbed sections, `textinput`, `slider` / `number` widgets — same contract as above.
+Natural follow-ons (not required for hosts): tabbed sections, `slider` / stepper polish — same contract as above.
 
 ---
 
 ## Item types
 
-Supported: `checkbox` | `button` | `dropdown` | `label` | `separator`  
+Supported: `checkbox` | `button` | `dropdown` | `label` | `separator` | `number` | `textinput` | `row`  
 (Implemented in `widgets/<type>.lua`.)
 
 ### `separator`
@@ -334,9 +343,12 @@ Supported: `checkbox` | `button` | `dropdown` | `label` | `separator`
   type = "button",
   id = "run",
   label = "Do thing",
+  enabled = true,  -- optional; false disables clicks / greys out
   onClick = function() end,
 }
 ```
+
+Use `SetButtonLabel` / `SetButtonEnabled` for busy states (e.g. “Scanning…”).
 
 ### `checkbox`
 
@@ -399,6 +411,81 @@ options = {
 | `listMaxHeight` | ScrollBox height hint |
 | `allowEmpty` | Allow cleared / placeholder state |
 | `placeholder` | Header text when nothing selected |
+
+### `number`
+
+Labeled numeric field. Value is stored as a Lua number (`Get` / `Set`). Invalid mid-edit text is ignored until a parseable number is typed.
+
+```lua
+{
+  type = "number",
+  id = "count",
+  label = "Count",
+  default = 1,
+  min = 1,
+  max = 999,
+  integer = true,       -- round to nearest int
+  placeholder = "1",    -- hint when empty
+  fieldWidth = 72,      -- EditableTextBox width
+  debounceMs = 250,     -- delay onChange only (default 250; 0 = immediate). Get stays live.
+  onChange = function(n) end,
+}
+```
+
+### `textinput`
+
+Labeled string field.
+
+```lua
+{
+  type = "textinput",
+  id = "name",
+  label = "Name",
+  default = "",
+  placeholder = "Enter name...",
+  maxLength = 32,
+  fieldWidth = 200,
+  debounceMs = 250,     -- delay onChange only (default 250; 0 = immediate). Get stays live.
+  onChange = function(text) end,
+}
+```
+
+`Get` / button `onClick` always see the latest parsed value. Only `onChange` waits for typing to pause.
+
+### `row`
+
+Horizontal group. Children share one line (Unity-style Count + field + button).
+
+Allowed children: `button` | `checkbox` | `label` | `number` | `textinput`  
+(Not: nested `row`, `dropdown`, `separator`.)
+
+```lua
+{
+  type = "row",
+  items = {
+    {
+      type = "number",
+      id = "count",
+      label = "Count",
+      default = 1,
+      min = 1,
+      integer = true,
+    },
+    {
+      type = "button",
+      id = "addSelected",
+      label = "Add Selected",
+      onClick = function()
+        local item = ModMenu.Get("Items", "item")
+        local count = ModMenu.Get("Items", "count")
+        -- grant / spawn
+      end,
+    },
+  },
+}
+```
+
+Pair with a searchable `dropdown` above the row for the classic select → count → submit flow.
 
 ---
 

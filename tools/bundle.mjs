@@ -29,6 +29,9 @@ const MODULES = [
   ["ModMenu.widgets.button", "widgets/button.lua"],
   ["ModMenu.widgets.checkbox", "widgets/checkbox.lua"],
   ["ModMenu.widgets.dropdown", "widgets/dropdown.lua"],
+  ["ModMenu.widgets.number", "widgets/number.lua"],
+  ["ModMenu.widgets.textinput", "widgets/textinput.lua"],
+  ["ModMenu.widgets.row", "widgets/row.lua"],
   ["ModMenu.widgets.init", "widgets/init.lua"],
 ];
 

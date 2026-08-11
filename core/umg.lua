@@ -89,6 +89,154 @@ function M.AddSpacer(parent, name, height)
     parent:AddChildToVerticalBox(spacer)
 end
 
+--- Attach a widget to ctx.contentBox (VerticalBox or HorizontalBox via ctx.layout).
+--- opts: fill (HBox fill), fillWeight, padLeft/Right/Top/Bottom, vAlign, fillVertical (VBox)
+function M.AddToContent(ctx, widget, opts)
+    opts = opts or {}
+    local parent = ctx.contentBox
+    local slot
+    if ctx.layout == "horizontal" then
+        slot = parent:AddChildToHorizontalBox(widget)
+        pcall(function()
+            if opts.fill then
+                slot:SetSize({ SizeRule = 1, Value = opts.fillWeight or 1.0 })
+            else
+                slot:SetSize({ SizeRule = 0, Value = 0.0 })
+            end
+            slot:SetPadding({
+                Left = opts.padLeft or 0,
+                Top = opts.padTop or 0,
+                Right = opts.padRight or 6,
+                Bottom = opts.padBottom or 0,
+            })
+            -- EVerticalAlignment::VAlign_Center = 2
+            slot:SetVerticalAlignment(opts.vAlign or 2)
+        end)
+    else
+        slot = parent:AddChildToVerticalBox(widget)
+        if opts.fillVertical then
+            M.FillVerticalSlot(slot)
+        end
+    end
+    return slot
+end
+
+--- Trailing pad after an item. No-op in horizontal rows (slot padding handles gaps).
+function M.AddItemPad(ctx, name, size)
+    if ctx.layout == "horizontal" then
+        return
+    end
+    M.AddSpacer(ctx.contentBox, name, size or 8)
+end
+
+-- Match searchable dropdown filter field (light bg + dark text).
+local FIELD_BG = { R = 0.88, G = 0.90, B = 0.94, A = 1.0 }
+local FIELD_TEXT = { R = 0.06, G = 0.07, B = 0.10, A = 1.0 }
+local FIELD_HINT = { R = 0.35, G = 0.38, B = 0.45, A = 1.0 }
+
+--- Style an EditableTextBox like the dropdown filter (light bg, dark text).
+function M.StyleEditableTextBox(edit, fontSize)
+    if edit == nil then
+        return
+    end
+    pcall(function()
+        edit:SetForegroundColor(FIELD_TEXT)
+    end)
+    pcall(function()
+        local style = edit.WidgetStyle
+        if style == nil then
+            return
+        end
+        local dark = FIELD_TEXT
+        local hint = FIELD_HINT
+        local bg = FIELD_BG
+        if style.ForegroundColor ~= nil then
+            style.ForegroundColor = { SpecifiedColor = dark, ColorUseRule = 0 }
+        end
+        if style.BackgroundColor ~= nil then
+            style.BackgroundColor = bg
+        end
+        if style.FocusedForegroundColor ~= nil then
+            style.FocusedForegroundColor = { SpecifiedColor = dark, ColorUseRule = 0 }
+        end
+        if style.TextStyle ~= nil then
+            if style.TextStyle.ColorAndOpacity ~= nil then
+                style.TextStyle.ColorAndOpacity = { SpecifiedColor = dark, ColorUseRule = 0 }
+            end
+            if style.TextStyle.Font ~= nil and style.TextStyle.Font.Size ~= nil and fontSize then
+                style.TextStyle.Font.Size = fontSize
+            end
+        end
+        if style.HintTextStyle ~= nil then
+            if style.HintTextStyle.ColorAndOpacity ~= nil then
+                style.HintTextStyle.ColorAndOpacity = { SpecifiedColor = hint, ColorUseRule = 0 }
+            end
+            if style.HintTextStyle.Font ~= nil and style.HintTextStyle.Font.Size ~= nil and fontSize then
+                style.HintTextStyle.Font.Size = fontSize
+            end
+        end
+    end)
+end
+
+--- Labeled single-line field: HorizontalBox(label + SizeBox(Border(EditableTextBox))).
+--- Same light-field treatment as the searchable dropdown filter.
+--- @return root, editBox, label
+function M.CreateLabeledEditable(outer, namePrefix, caption, initialText, opts)
+    opts = opts or {}
+    local fontSize = opts.fontSize or defaults.fontItem
+    local fieldWidth = opts.fieldWidth or 96
+    local hint = opts.hint
+
+    local root = M.Construct("/Script/UMG.HorizontalBox", outer, namePrefix .. "_Row")
+
+    local label = M.Construct("/Script/UMG.TextBlock", root, namePrefix .. "_Label")
+    M.StyleText(label, fontSize)
+    M.SetLabelText(label, caption or "")
+    local labelSlot = root:AddChildToHorizontalBox(label)
+    pcall(function()
+        labelSlot:SetSize({ SizeRule = 0, Value = 0.0 })
+        labelSlot:SetPadding({ Left = 0, Top = 4, Right = 8, Bottom = 4 })
+        labelSlot:SetVerticalAlignment(2)
+    end)
+
+    local sizeBox = M.Construct("/Script/UMG.SizeBox", root, namePrefix .. "_Size")
+    pcall(function()
+        sizeBox:SetWidthOverride(fieldWidth)
+    end)
+
+    local border = M.Construct("/Script/UMG.Border", sizeBox, namePrefix .. "_Border")
+    pcall(function()
+        border:SetBrushColor(FIELD_BG)
+        border:SetPadding({ Left = 8, Top = 4, Right = 8, Bottom = 4 })
+    end)
+
+    local edit = M.Construct("/Script/UMG.EditableTextBox", border, namePrefix .. "_Edit")
+    pcall(function()
+        edit:SetText(FText(tostring(initialText or "")))
+        if hint ~= nil and hint ~= "" then
+            edit:SetHintText(FText(tostring(hint)))
+        end
+    end)
+    M.StyleEditableTextBox(edit, fontSize)
+    pcall(function()
+        border:SetContent(edit)
+        sizeBox:SetContent(border)
+    end)
+
+    local fieldSlot = root:AddChildToHorizontalBox(sizeBox)
+    pcall(function()
+        if opts.fillField then
+            fieldSlot:SetSize({ SizeRule = 1, Value = 1.0 })
+        else
+            fieldSlot:SetSize({ SizeRule = 0, Value = 0.0 })
+        end
+        fieldSlot:SetPadding({ Left = 0, Top = 0, Right = 0, Bottom = 0 })
+        fieldSlot:SetVerticalAlignment(2)
+    end)
+
+    return root, edit, label
+end
+
 function M.CreateLabeledToggle(outer, namePrefix, caption, initialChecked, fontSize)
     local check = M.Construct("/Script/UMG.CheckBox", outer, namePrefix .. "_Check")
     local label = M.Construct("/Script/UMG.TextBlock", check, namePrefix .. "_Label")

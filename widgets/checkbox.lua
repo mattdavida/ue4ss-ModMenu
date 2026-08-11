@@ -52,8 +52,8 @@ function Checkbox.build(ctx)
         Caption(item, current),
         current
     )
-    ctx.contentBox:AddChildToVerticalBox(check)
-    umg.AddSpacer(ctx.contentBox, ctx.namePrefix .. "_Pad", 8)
+    umg.AddToContent(ctx, check)
+    umg.AddItemPad(ctx, ctx.namePrefix .. "_Pad", 8)
     table.insert(ctx.liveControls, {
         kind = "checkbox",
         sectionId = ctx.section.id,

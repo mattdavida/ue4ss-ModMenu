@@ -18,6 +18,13 @@
         { type = "dropdown", id = "item", label = "Item", searchable = true,
           placeholder = "Select item...", maxVisible = 12,
           options = { ... }, onChange = function(value) end },
+        { type = "row", items = {
+            { type = "number", id = "count", label = "Count", default = 1, min = 1, integer = true },
+            { type = "button", id = "add", label = "Add Selected",
+              onClick = function()
+                local n = ModMenu.Get("MyMod", "count")
+              end },
+          }},
         { type = "label", label = "Hint text" },
         { type = "separator" },
       },
@@ -252,6 +259,23 @@ local function ValidateItem(item, sectionId, index)
     if widget.validate then
         widget.validate(item, sectionId, index)
     end
+end
+
+--- Walk top-level + row.children items (depth 1 nesting).
+local function FindItemById(items, itemId, typeName)
+    for _, item in ipairs(items or {}) do
+        if item.id == itemId and (typeName == nil or item.type == typeName) then
+            return item
+        end
+        if item.type == "row" and type(item.items) == "table" then
+            for _, child in ipairs(item.items) do
+                if child.id == itemId and (typeName == nil or child.type == typeName) then
+                    return child
+                end
+            end
+        end
+    end
+    return nil
 end
 
 local function ValidateSection(section)
@@ -1025,26 +1049,90 @@ function ModMenu.SetLabel(sectionId, itemId, text)
         return false
     end
     local section = sections[idx]
-    for _, item in ipairs(section.items) do
-        if item.id == itemId and item.type == "label" then
-            item.label = tostring(text)
-            local vkey = ValueKey(sectionId, itemId)
-            local ctx = MakeWidgetCtx()
-            local labelWidget = Widgets.get("label")
-            for _, ctrl in ipairs(liveControls) do
-                if ctrl.kind == "label" and ctrl.valueKey == vkey and IsValid(ctrl.widget) then
-                    if labelWidget and labelWidget.apply then
-                        labelWidget.apply(ctrl, item.label, ctx)
-                    end
-                end
+    local item = FindItemById(section.items, itemId, "label")
+    if not item then
+        return false
+    end
+    item.label = tostring(text)
+    local vkey = ValueKey(sectionId, itemId)
+    local ctx = MakeWidgetCtx()
+    local labelWidget = Widgets.get("label")
+    for _, ctrl in ipairs(liveControls) do
+        if ctrl.kind == "label" and ctrl.valueKey == vkey and IsValid(ctrl.widget) then
+            if labelWidget and labelWidget.apply then
+                labelWidget.apply(ctrl, item.label, ctx)
+            end
+        end
+    end
+    return true
+end
+
+--- Update a button's caption (section item + live TextBlock if present).
+---@param sectionId string
+---@param itemId string
+---@param text string
+---@return boolean
+function ModMenu.SetButtonLabel(sectionId, itemId, text)
+    local idx = sectionIndexById[sectionId]
+    if not idx then
+        return false
+    end
+    local section = sections[idx]
+    local item = FindItemById(section.items, itemId, "button")
+    if not item then
+        return false
+    end
+    item.label = tostring(text)
+    for _, ctrl in ipairs(liveControls) do
+        if ctrl.kind == "button"
+            and ctrl.sectionId == sectionId
+            and ctrl.item
+            and ctrl.item.id == itemId
+        then
+            -- Do not gate on IsValid(labelWidget) — Button child TextBlocks often report invalid.
+            SetLabelText(ctrl.labelWidget, item.label)
+            return true
+        end
+    end
+    return true
+end
+
+--- Enable/disable a button (blocks poll clicks + UMG SetIsEnabled when live).
+---@param sectionId string
+---@param itemId string
+---@param enabled boolean
+---@return boolean
+function ModMenu.SetButtonEnabled(sectionId, itemId, enabled)
+    local idx = sectionIndexById[sectionId]
+    if not idx then
+        return false
+    end
+    local section = sections[idx]
+    local item = FindItemById(section.items, itemId, "button")
+    if not item then
+        return false
+    end
+    local on = enabled and true or false
+    item.enabled = on
+    for _, ctrl in ipairs(liveControls) do
+        if ctrl.kind == "button"
+            and ctrl.sectionId == sectionId
+            and ctrl.item
+            and ctrl.item.id == itemId
+        then
+            ctrl.enabled = on
+            if IsValid(ctrl.widget) then
+                pcall(function()
+                    ctrl.widget:SetIsEnabled(on)
+                end)
             end
             return true
         end
     end
-    return false
+    return true
 end
 
---- Set a value and sync a live checkbox/dropdown if present.
+--- Set a value and sync a live checkbox/dropdown/number/textinput if present.
 ---@param sectionId string
 ---@param itemId string
 ---@param value any
