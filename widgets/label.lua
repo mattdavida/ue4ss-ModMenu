@@ -18,10 +18,11 @@ function Label.build(ctx)
     local label = umg.Construct("/Script/UMG.TextBlock", ctx.contentBox, ctx.namePrefix)
     umg.StyleText(label, ctx.config.fontHint)
     umg.SetLabelText(label, item.label)
-    umg.EnableAutoWrap(label)
-    local slot = ctx.contentBox:AddChildToVerticalBox(label)
-    umg.FillVerticalSlot(slot)
-    umg.AddSpacer(ctx.contentBox, ctx.namePrefix .. "_Pad", 6)
+    if ctx.layout ~= "horizontal" then
+        umg.EnableAutoWrap(label)
+    end
+    umg.AddToContent(ctx, label, { fillVertical = ctx.layout ~= "horizontal" })
+    umg.AddItemPad(ctx, ctx.namePrefix .. "_Pad", 6)
     if item.id then
         table.insert(ctx.liveControls, {
             kind = "label",

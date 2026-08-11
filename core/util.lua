@@ -54,4 +54,54 @@ function M.SafeCall(fn, ...)
     end
 end
 
+--- Default debounce for textinput / number onChange (ms). 0 = immediate.
+M.DEFAULT_INPUT_DEBOUNCE_MS = 250
+
+function M.ValidateDebounceMs(item, prefix)
+    if item.debounceMs ~= nil and (type(item.debounceMs) ~= "number" or item.debounceMs < 0) then
+        error(prefix .. " debounceMs must be a number >= 0")
+    end
+end
+
+function M.ResolveDebounceMs(item, defaultMs)
+    if item.debounceMs == nil then
+        return defaultMs or M.DEFAULT_INPUT_DEBOUNCE_MS
+    end
+    return item.debounceMs
+end
+
+--- Queue a debounced onChange. Values store should already be updated (Get stays live).
+function M.ScheduleDebouncedOnChange(ctrl, debounceMs)
+    if debounceMs == nil or debounceMs <= 0 then
+        ctrl.onChangeDue = 0
+    else
+        ctrl.onChangeDue = os.clock() + (debounceMs / 1000)
+    end
+end
+
+--- Fire pending onChange when due. No-op if nothing scheduled or value unchanged since last fire.
+function M.FlushDebouncedOnChange(ctrl, ctx)
+    if ctrl.onChangeDue == nil then
+        return
+    end
+    if os.clock() < ctrl.onChangeDue then
+        return
+    end
+    ctrl.onChangeDue = nil
+    local v = ctx.values[ctrl.valueKey]
+    if v == ctrl.lastFiredOnChange then
+        return
+    end
+    ctrl.lastFiredOnChange = v
+    M.SafeCall(ctrl.item.onChange, v)
+end
+
+--- Clear pending debounce (e.g. after Set/apply). Optionally sync lastFiredOnChange.
+function M.ClearDebouncedOnChange(ctrl, syncValue)
+    ctrl.onChangeDue = nil
+    if syncValue ~= nil then
+        ctrl.lastFiredOnChange = syncValue
+    end
+end
+
 return M

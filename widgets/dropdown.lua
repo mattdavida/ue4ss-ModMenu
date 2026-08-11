@@ -197,42 +197,8 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
         pcall(function()
             searchBox:SetHintText(FText("Type to filter..."))
             searchBox:SetText(FText(""))
-            searchBox:SetForegroundColor(LIGHT_ROW_TEXT)
         end)
-        pcall(function()
-            local style = searchBox.WidgetStyle
-            if style == nil then
-                return
-            end
-            local dark = LIGHT_ROW_TEXT
-            local hint = { R = 0.35, G = 0.38, B = 0.45, A = 1.0 }
-            local bg = LIGHT_ROW_BG
-            if style.ForegroundColor ~= nil then
-                style.ForegroundColor = { SpecifiedColor = dark, ColorUseRule = 0 }
-            end
-            if style.BackgroundColor ~= nil then
-                style.BackgroundColor = bg
-            end
-            if style.FocusedForegroundColor ~= nil then
-                style.FocusedForegroundColor = { SpecifiedColor = dark, ColorUseRule = 0 }
-            end
-            if style.TextStyle ~= nil then
-                if style.TextStyle.ColorAndOpacity ~= nil then
-                    style.TextStyle.ColorAndOpacity = { SpecifiedColor = dark, ColorUseRule = 0 }
-                end
-                if style.TextStyle.Font ~= nil and style.TextStyle.Font.Size ~= nil then
-                    style.TextStyle.Font.Size = fontDropdown
-                end
-            end
-            if style.HintTextStyle ~= nil then
-                if style.HintTextStyle.ColorAndOpacity ~= nil then
-                    style.HintTextStyle.ColorAndOpacity = { SpecifiedColor = hint, ColorUseRule = 0 }
-                end
-                if style.HintTextStyle.Font ~= nil and style.HintTextStyle.Font.Size ~= nil then
-                    style.HintTextStyle.Font.Size = fontDropdown
-                end
-            end
-        end)
+        Umg.StyleEditableTextBox(searchBox, fontDropdown)
         pcall(function()
             searchBorder:SetContent(searchBox)
         end)

@@ -59,7 +59,7 @@ Reference feel: Silksong-style cheats UI — tabs, collapsible groups, checkbox 
 - [ ] Tabs / section groups
 - [ ] Button / checkbox visual polish (states, grids)
 - [ ] Close affordance in chrome (optional)
-- [ ] Extra widget types (`slider`, `number`, `textinput`, …)
+- [x] Extra widget types (`number`, `textinput`, `row`; `slider` still open)
 
 ---
 
@@ -212,8 +212,9 @@ Goal: fill common cheat-menu controls (same widget contract).
 Priority order:
 
 - [ ] `slider` (float / int display + optional step)
-- [ ] `number` / stepper (value + − / +)
-- [ ] `textinput` (EditableTextBox; careful with focus / input mode)
+- [x] `number` (EditableTextBox + parse/clamp; stepper polish optional)
+- [x] `textinput` (EditableTextBox; poll GetText — do not reclaim on keystroke)
+- [x] `row` (HorizontalBox group for label/field/button on one line)
 - [ ] `radio` or single-choice button group (if dropdown isn’t enough)
 - [ ] `button` grid already covered in Phase 4 — ensure docs show patterns
 

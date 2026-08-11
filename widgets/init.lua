@@ -25,6 +25,9 @@ register(require("ModMenu.widgets.label"))
 register(require("ModMenu.widgets.button"))
 register(require("ModMenu.widgets.checkbox"))
 register(require("ModMenu.widgets.dropdown"))
+register(require("ModMenu.widgets.number"))
+register(require("ModMenu.widgets.textinput"))
+register(require("ModMenu.widgets.row"))
 
 local M = {}
 
