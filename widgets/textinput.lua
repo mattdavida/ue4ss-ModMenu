@@ -26,6 +26,9 @@ function TextInput.validate(item, sectionId, index)
     if item.fieldWidth ~= nil and (type(item.fieldWidth) ~= "number" or item.fieldWidth < 1) then
         error(prefix .. " fieldWidth must be a positive number")
     end
+    if item.labelWidth ~= nil and (type(item.labelWidth) ~= "number" or item.labelWidth < 1) then
+        error(prefix .. " labelWidth must be a positive number")
+    end
     if item.maxLength ~= nil and (type(item.maxLength) ~= "number" or item.maxLength < 1) then
         error(prefix .. " maxLength must be a positive number")
     end
@@ -63,6 +66,7 @@ function TextInput.build(ctx)
         {
             fontSize = ctx.config.fontItem,
             fieldWidth = item.fieldWidth or (ctx.layout == "horizontal" and 140 or 200),
+            labelWidth = item.labelWidth,
             hint = item.placeholder,
             fillField = fillField,
         }

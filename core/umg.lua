@@ -192,7 +192,18 @@ function M.CreateLabeledEditable(outer, namePrefix, caption, initialText, opts)
     local label = M.Construct("/Script/UMG.TextBlock", root, namePrefix .. "_Label")
     M.StyleText(label, fontSize)
     M.SetLabelText(label, caption or "")
-    local labelSlot = root:AddChildToHorizontalBox(label)
+
+    local labelHost = label
+    if type(opts.labelWidth) == "number" and opts.labelWidth > 0 then
+        local labelSize = M.Construct("/Script/UMG.SizeBox", root, namePrefix .. "_LabelSize")
+        pcall(function()
+            labelSize:SetWidthOverride(opts.labelWidth)
+            labelSize:SetContent(label)
+        end)
+        labelHost = labelSize
+    end
+
+    local labelSlot = root:AddChildToHorizontalBox(labelHost)
     pcall(function()
         labelSlot:SetSize({ SizeRule = 0, Value = 0.0 })
         labelSlot:SetPadding({ Left = 0, Top = 4, Right = 8, Bottom = 4 })
