@@ -90,6 +90,9 @@ function Number.validate(item, sectionId, index)
     if item.fieldWidth ~= nil and (type(item.fieldWidth) ~= "number" or item.fieldWidth < 1) then
         error(prefix .. " fieldWidth must be a positive number")
     end
+    if item.labelWidth ~= nil and (type(item.labelWidth) ~= "number" or item.labelWidth < 1) then
+        error(prefix .. " labelWidth must be a positive number")
+    end
     Util.ValidateDebounceMs(item, prefix)
 end
 
@@ -122,6 +125,7 @@ function Number.build(ctx)
         {
             fontSize = ctx.config.fontItem,
             fieldWidth = item.fieldWidth or (ctx.layout == "horizontal" and 72 or 96),
+            labelWidth = item.labelWidth,
             hint = item.placeholder,
             fillField = fillField,
         }

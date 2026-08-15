@@ -3,7 +3,7 @@
 
   Usage:
     local ModMenu = require("ModMenu.ModMenu")
-    ModMenu.Init({ title = "My Mod Menu", key = Key.F6 })
+    ModMenu.Init({ title = "My Mod Menu", key = Key.F6 }) -- ignoreLook = true to lock camera
     ModMenu.Register({
       id = "MyMod",
       title = "My Mod",
@@ -98,6 +98,7 @@ local config = {
     fontDropdown = 22,
     instanceId = nil, -- optional human tag for FNames / Live View (e.g. "TestMod")
     canOpen = nil, -- optional fun(): boolean|boolean,string — gate Open / key toggle open
+    ignoreLook = false, -- opt-in: SetIgnoreLookInput while open (mouse-look games)
 }
 
 local sections = {} ---@type table[]
@@ -383,16 +384,21 @@ local function ForceMenuCursor(pc)
     pc.bShowMouseCursor = true
     pc.bEnableClickEvents = true
     pc.bEnableMouseOverEvents = true
-    EnsureLookIgnored(pc)
+    if config.ignoreLook == true then
+        EnsureLookIgnored(pc)
+    end
 end
 
 --- Restore PlayerController cursor/look flags when the last ModMenu closes.
+--- If we never took over input, leave the game's cursor/mode alone
+--- (ClientRestart / DestroyShell used to force cursor off and GameOnly,
+--- which hides hub/inventory cursors on games like Witchfire).
 local function RestoreMenuCursor(pc)
     if SharedGet(SHARED_INPUT_SAVED) ~= true then
-        pc.bShowMouseCursor = false
-        return
+        return false
     end
-    pc.bShowMouseCursor = SharedGet(SHARED_SAVED_SHOW_CURSOR) == true
+    local wasShowingCursor = SharedGet(SHARED_SAVED_SHOW_CURSOR) == true
+    pc.bShowMouseCursor = wasShowingCursor
     pc.bEnableClickEvents = SharedGet(SHARED_SAVED_CLICK) == true
     pc.bEnableMouseOverEvents = SharedGet(SHARED_SAVED_HOVER) == true
     if SharedGet(SHARED_SAVED_LOOK_BUMP) == true then
@@ -402,6 +408,7 @@ local function RestoreMenuCursor(pc)
     end
     SharedSet(SHARED_INPUT_SAVED, false)
     SharedSet(SHARED_SAVED_LOOK_BUMP, false)
+    return wasShowingCursor
 end
 
 --- Show software cursor + GameAndUI (the mode that worked — white cursor).
@@ -435,8 +442,13 @@ local function SetMenuInputActive(active, remainingOpenCount)
                 ForceMenuCursor(pc)
                 return
             end
-            RestoreMenuCursor(pc)
-            ApplyGameOnly(lib, pc)
+            -- Only GameOnly if we actually took over from mouse-look (saved cursor false).
+            -- If the game already had a cursor (hub / inventory), leave its input mode.
+            local hadSaved = SharedGet(SHARED_INPUT_SAVED) == true
+            local wasShowingCursor = RestoreMenuCursor(pc)
+            if hadSaved and wasShowingCursor ~= true then
+                ApplyGameOnly(lib, pc)
+            end
         end
     end)
     if not ok then
@@ -541,6 +553,7 @@ end
 
 local function DestroyShell()
     StopPoll()
+    local wasHoldingInput = menuOpen or openCountHeld
     local remaining = NoteMenuClosed()
     if IsValid(menuRoot) then
         pcall(function()
@@ -555,7 +568,11 @@ local function DestroyShell()
     panelSlot = nil
     liveControls = {}
     menuOpen = false
-    SetMenuInputActive(false, remaining)
+    -- ClientRestart always destroys the shell. Do not ApplyGameOnly / hide
+    -- the cursor unless this instance had actually taken input.
+    if wasHoldingInput then
+        SetMenuInputActive(false, remaining)
+    end
 end
 
 local function BuildContent()
@@ -671,8 +688,25 @@ local function CreateShell()
         border:SetPadding({ Left = 20, Top = 18, Right = 20, Bottom = 18 })
     end)
 
-    local vbox = Construct("/Script/UMG.VerticalBox", border, "ModMenu_VBox_" .. suffix)
-    border:SetContent(vbox)
+    -- ScrollBox fills the docked panel so long section lists are reachable.
+    local scroll = Construct("/Script/UMG.ScrollBox", border, "ModMenu_Scroll_" .. suffix)
+    pcall(function()
+        scroll:SetAnimateWheelScrolling(true)
+        scroll:SetAlwaysShowScrollbar(true)
+        scroll:SetAllowOverscroll(false)
+        if scroll.SetConsumeMouseWheel then
+            scroll:SetConsumeMouseWheel(1) -- EConsumeMouseWheel::Always
+        end
+        if scroll.SetScrollbarThickness then
+            scroll:SetScrollbarThickness({ X = 8, Y = 8 })
+        end
+    end)
+    border:SetContent(scroll)
+
+    local vbox = Construct("/Script/UMG.VerticalBox", scroll, "ModMenu_VBox_" .. suffix)
+    pcall(function()
+        scroll:AddChild(vbox)
+    end)
 
     local slot = canvas:AddChildToCanvas(border)
     panelSlot = slot
@@ -756,13 +790,16 @@ local function StartPoll()
         if not menuOpen then
             return
         end
-        -- Reclaim when the game steals cursor / click routing / look-ignore (toast, mouse-look, etc.).
+        -- Reclaim when the game steals cursor / click routing (toast, etc.).
+        -- Look-ignore is opt-in (Init ignoreLook) — do not re-lock the camera by default.
         local pc = UEHelpers.GetPlayerController()
         if IsValid(pc) then
             local lookOk = true
-            pcall(function()
-                lookOk = pc:IsLookInputIgnored() == true
-            end)
+            if config.ignoreLook == true then
+                pcall(function()
+                    lookOk = pc:IsLookInputIgnored() == true
+                end)
+            end
             if not pc.bShowMouseCursor
                 or not pc.bEnableClickEvents
                 or not pc.bEnableMouseOverEvents
@@ -927,6 +964,9 @@ function ModMenu.Init(opts)
             error("ModMenu.Init: canOpen must be a function or false/nil")
         end
         config.canOpen = (type(opts.canOpen) == "function") and opts.canOpen or nil
+    end
+    if opts.ignoreLook ~= nil then
+        config.ignoreLook = opts.ignoreLook == true
     end
     -- Human-readable FName tag (Live View). Locked after first EnsureInstanceIdentity.
     if opts.instanceId ~= nil and instanceTag == nil then

@@ -179,6 +179,7 @@ Configure and bind this mod’s shell. Safe to call more than once (updates conf
 | `rightFrac` | `0.01` | Edge margin (both docks) |
 | `fontTitle` / `fontHint` / `fontItem` / `fontSection` | 32 / 20 / 24 / 26 | Optional |
 | `canOpen` | `nil` | Optional `function(): boolean` or `false, "reason"`. Gates **open** (key toggle + `ModMenu.Open`); close is never gated. Pass `false` on a later `Init` to clear. |
+| `ignoreLook` | `false` | Opt-in. While open, `SetIgnoreLookInput(true)` so mouse-look games do not spin the camera. Default off — hosts that need a locked camera must pass `true`. |
 
 Also installs viewport hooks, LMB click latch, and the toggle keybind.
 
@@ -427,6 +428,7 @@ Labeled numeric field. Value is stored as a Lua number (`Get` / `Set`). Invalid 
   integer = true,       -- round to nearest int
   placeholder = "1",    -- hint when empty
   fieldWidth = 72,      -- EditableTextBox width
+  labelWidth = 156,     -- optional; same width on every row = table-aligned fields
   debounceMs = 250,     -- delay onChange only (default 250; 0 = immediate). Get stays live.
   onChange = function(n) end,
 }
@@ -445,6 +447,7 @@ Labeled string field.
   placeholder = "Enter name...",
   maxLength = 32,
   fieldWidth = 200,
+  labelWidth = 156,     -- optional; align stacked fields
   debounceMs = 250,     -- delay onChange only (default 250; 0 = immediate). Get stays live.
   onChange = function(text) end,
 }
@@ -487,6 +490,8 @@ Allowed children: `button` | `checkbox` | `label` | `number` | `textinput`
 
 Pair with a searchable `dropdown` above the row for the classic select → count → submit flow.
 
+For stacked amount rows, set the same `labelWidth` + `fieldWidth` on every `number` so the fields line up.
+
 ---
 
 ## Dynamic UI patterns
@@ -523,13 +528,14 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 
 1. **Per-mod shell** — each Lua mod has its own ModMenu state (`require` is not shared across mods). Multiple mods may each `Init` an independent panel. UObject roots are named `ModMenu_Root_<instanceId>_<n>` using a `ModRef` serial (`ModMenu.NextInstanceId`) so they never collide under `GameInstance`.
 2. **Toggle keys** — prefer a unique `key` / `keyHint` per mod. Claims are stored as `ModMenu.KeyClaim.<keyHint>`; clashes log **KEY CONFLICT**. UE4SS may fire every binder on that key (both menus toggle — useful for same-author dual docks, confusing for unrelated mods).
-3. **Input** — while open, uses GameAndUI + mouse cursor. Clicks use LMB keybind latch + `IsHovered()` (not UE `OnClicked` alone). Closing one menu does not force GameOnly while another ModMenu is still open (`ModMenu.OpenCount`).
+3. **Input** — while open, uses GameAndUI + mouse cursor. Clicks use LMB keybind latch + `IsHovered()` (not UE `OnClicked` alone). Closing one menu does not force GameOnly while another ModMenu is still open (`ModMenu.OpenCount`). `ClientRestart` / `DestroyShell` do not touch input unless this instance had the menu open. On close, `GameOnly` is applied only if the game had no cursor when we opened (mouse-look); hub/inventory cursors are left alone. Camera look is **not** locked unless `Init({ ignoreLook = true })`.
 4. **Dock** — left/right presets only (header button + `SetDock`). No free drag. Session only (not saved to disk).
-5. **FNames** — shell names include `instanceId`; content rebuilds bump an internal generation after `ClearChildren`. Prefer `SetOptions` on searchable lists over constant full rebuilds.
-6. **Large lists** — keep `maxVisible` bounded; filter narrows the working set. Building thousands of UButtons at once is risky.
-7. **Game readiness** — many game objects only exist after a save is loaded; surface that in a status `label` and/or `OnOpen` retry.
-8. **Callbacks** — errors inside `onClick` / `onChange` are caught and logged as `[ModMenu] callback error: ...`.
-9. **Hot-reload** — `ModRef` shared vars (`NextInstanceId`, key claims, open count) are **not** cleared on Ctrl+R.
+5. **Scroll** — the docked panel is a fixed viewport; section content lives in a ScrollBox (mouse wheel). Use `labelWidth` on `number` / `textinput` so amount rows line up like a table.
+6. **FNames** — shell names include `instanceId`; content rebuilds bump an internal generation after `ClearChildren`. Prefer `SetOptions` on searchable lists over constant full rebuilds.
+7. **Large lists** — keep `maxVisible` bounded; filter narrows the working set. Building thousands of UButtons at once is risky.
+8. **Game readiness** — many game objects only exist after a save is loaded; surface that in a status `label` and/or `OnOpen` retry.
+9. **Callbacks** — errors inside `onClick` / `onChange` are caught and logged as `[ModMenu] callback error: ...`.
+10. **Hot-reload** — `ModRef` shared vars (`NextInstanceId`, key claims, open count) are **not** cleared on Ctrl+R.
 
 ---
 
