@@ -537,7 +537,7 @@ Re-call `Register` with the same `id` and a new `items` array (e.g. show Categor
 ```lua
 ModMenu.OnOpen(function()
     if alreadyLoaded then return end
-    ExecuteWithDelay(50, function()
+    ExecuteInGameThreadWithDelay(50, function()
         -- fetch DB, then SetOptions / SetLabel / Register
     end)
 end)

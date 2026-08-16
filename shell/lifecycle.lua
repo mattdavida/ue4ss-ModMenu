@@ -32,6 +32,8 @@ local function PollControls(S)
     local ctx = S.makeWidgetCtx()
 
     -- Continuous polls (search filter, checkbox state, UButton IsPressed).
+    -- pollClick is the LMB-latch fallback. Handlers must SuppressPressEdge so
+    -- a latch click is not also treated as an IsPressed rising edge next tick.
     for _, ctrl in ipairs(S.liveControls) do
         if ctrl.kind == "dock" then
             Dock.Poll(S, ctrl)
