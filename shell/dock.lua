@@ -95,8 +95,10 @@ function M.PollClick(S, ctrl)
     if not Input.WidgetHovered(ctrl.widget) then
         return false
     end
+    Input.SuppressPressEdge(ctrl)
     M.Flip(S)
     InputMode.Reclaim()
+    Input.IgnoreClicks(2)
     return true
 end
 

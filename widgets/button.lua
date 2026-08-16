@@ -40,10 +40,12 @@ end
 
 --- Fire onClick. Shared by IsPressed poll and LMB-latch pollClick.
 local function FireClick(ctrl, ctx)
+    ctx.Input.SuppressPressEdge(ctrl)
     ctx.SafeCall(ctrl.item.onClick)
     ctx.ReclaimMenuInput()
     ctx.Input.IgnoreClicks(2)
-    ExecuteWithDelay(200, function()
+    -- Reclaim touches PlayerController / SetInputMode — must stay on the game thread.
+    ExecuteInGameThreadWithDelay(200, function()
         ctx.ReclaimMenuInput()
     end)
     return true

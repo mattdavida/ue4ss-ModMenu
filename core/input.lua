@@ -224,6 +224,16 @@ function M.IgnoreClicks(n)
     mouseClickLatch = false
 end
 
+--- After a latch click, mark the widget down so WidgetPressedEdge does not
+--- fire again on the next 16ms tick (IsPressed / HasMouseCapture lag).
+---@param state table|nil
+---@param flagKey string|nil
+function M.SuppressPressEdge(state, flagKey)
+    if state ~= nil then
+        state[flagKey or "wasPressed"] = true
+    end
+end
+
 --- Clear latch + ignore counters (e.g. after content rebuild while open).
 function M.ClearClickState()
     mouseClickLatch = false

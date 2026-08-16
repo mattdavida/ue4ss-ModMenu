@@ -374,6 +374,8 @@ local function SelectOption(ctrl, ctx, row)
     ctrl.selectedLabel = tostring(row.optLabel or value)
     ctx.values[ctrl.valueKey] = value
     SetExpanded(ctrl, false)
+    Input.SuppressPressEdge(row)
+    Input.SuppressPressEdge(ctrl, "headerWasPressed")
     Input.IgnoreClicks(2)
     ctx.SafeCall(ctrl.item.onChange, value)
     ctx.ReclaimMenuInput()
@@ -389,6 +391,7 @@ local function ToggleHeader(ctrl, ctx)
         Dropdown.collapseAll(ctx.liveControls, ctrl)
     end
     SetExpanded(ctrl, nextExpanded)
+    Input.SuppressPressEdge(ctrl, "headerWasPressed")
     Input.IgnoreClicks(2)
     return true
 end
