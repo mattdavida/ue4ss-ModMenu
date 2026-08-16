@@ -959,6 +959,7 @@ function ModMenu.Init(opts)
     if opts.fontHint ~= nil then config.fontHint = opts.fontHint end
     if opts.fontItem ~= nil then config.fontItem = opts.fontItem end
     if opts.fontSection ~= nil then config.fontSection = opts.fontSection end
+    if opts.fontDropdown ~= nil then config.fontDropdown = opts.fontDropdown end
     if opts.canOpen ~= nil then
         if opts.canOpen ~= false and type(opts.canOpen) ~= "function" then
             error("ModMenu.Init: canOpen must be a function or false/nil")
