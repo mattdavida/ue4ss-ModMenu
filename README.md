@@ -54,15 +54,18 @@ Omit this repo’s `README.md` / `GithubAssets/` from player zips (use Nexus gal
 Development uses the multi-file tree (what you edit in this repo):
 
 ```
-ModMenu.lua                 ← public API + shell
-core/                       ← util, umg, input, options
+ModMenu.lua                 ← public API facade
+core/                       ← util, umg, shared, config, instance, inputmode, input, options
+shell/                      ← session, dock, build, lifecycle, registry
 widgets/                    ← one module per item type + registry
 tools/
   bundle.mjs                ← npm run bundle
   deploy.mjs                ← npm run deploy → dist/ModMenu.zip
 ```
 
-When adding a widget or core module, register it in `tools/bundle.mjs` (`MODULES`) so releases stay complete.
+`widgets/*.lua` are auto-bundled. New `core/` or `shell/` files still need a `MODULES` row in `tools/bundle.mjs`.
+
+Architecture: see `plan.md`. UX / theming: see `vision.md`.
 
 ---
 
@@ -293,45 +296,47 @@ ModMenu.GetDock()
 
 ## Extending: widget contract
 
-Item types live under `widgets/`. The shell never hard-codes control UMG — it asks the registry.
+Item types live under `widgets/`. The shell never hard-codes control UMG — it asks the registry. Do **not** `require` dropdown (or any widget type) from `ModMenu.lua`; the facade stays wire + public API. Host-facing `SetLabel` / `SetButtonLabel` / `SetButtonEnabled` names stay.
 
 ### Contract
 
 Each widget module returns a table:
 
-| Field | Required | Role |
-|-------|----------|------|
-| `type` | yes | String id (`"button"`, …) |
-| `validate(item, sectionId, index)` | no | Throw on bad Register fields |
-| `seed(sectionId, item, values)` | no | Default into values store on Register |
-| `build(ctx)` | yes | Construct UMG; append to `ctx.liveControls` |
-| `poll(ctrl, ctx)` | no | Continuous tick (checkbox state, search filter) |
-| `pollClick(ctrl, ctx)` | no | LMB click handler; return `true` if consumed |
-| `apply(ctrl, value, ctx)` | no | Sync live widget from `ModMenu.Set` / `SetLabel` |
+| Hook | When |
+|------|------|
+| `type` | String id (`"button"`, …) — required |
+| `validate(item, sectionId, index)` | `Register` — throw on bad fields |
+| `seed(sectionId, item, values)` | `Register` — default into `values` |
+| `build(ctx)` | `BuildContent` — construct UMG; append to `ctx.liveControls` |
+| `poll(ctrl, ctx)` | every open-menu tick (checkbox, `IsPressed`, search) |
+| `pollClick(ctrl, ctx)` | LMB latch rising edge; return `true` if consumed |
+| `apply(ctrl, value, ctx)` | `ModMenu.Set` / `SetLabel` / live sync |
 
-Dropdown also exposes helpers used by the shell (`refreshLive`, `collapseAll`, …).
+Dropdown also exposes helpers used by the registry (`refreshLive`, `collapseAll`, …).
 
 ### Build `ctx`
 
 | Field | Purpose |
 |-------|---------|
-| `contentBox` | Parent vertical box |
-| `section` / `item` | Current section + item |
-| `namePrefix` | Unique FName prefix |
 | `values` / `liveControls` | Shared store + control records |
 | `config` | Fonts / layout from `Init` |
 | `umg` | `ModMenu.core.umg` |
 | `Input` | `ModMenu.core.input` |
 | `ValueKey` / `SafeCall` / `IsValid` | Helpers |
 | `ReclaimMenuInput` / `EnsureMenuVisible` | Shell input helpers |
+| `contentBox` | Parent vertical box |
+| `section` / `item` | Current section + item |
+| `namePrefix` | Unique FName prefix |
+| `layout` | `nil`, or `"horizontal"` inside a `row` |
 
 ### Adding a new type (PR checklist)
 
 1. Create `widgets/<type>.lua` implementing the contract (copy `button.lua` or `checkbox.lua`).
 2. `register(require("ModMenu.widgets.<type>"))` in `widgets/init.lua`.
-3. Add the module to `MODULES` in `tools/bundle.mjs`.
-4. Document fields under **Item types** below.
-5. Smoke-test via a host `Register` section, then `npm run deploy`.
+3. Document fields under **Item types** below.
+4. Smoke-test via a host `Register` section, then `npm run deploy`.
+
+`widgets/*.lua` are auto-bundled — do not add a `MODULES` row for a new widget. New `core/` or `shell/` files still need one.
 
 Natural follow-ons (not required for hosts): tabbed sections, `slider` / stepper polish — same contract as above.
 
@@ -555,6 +560,18 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 9. **Callbacks** — errors inside `onClick` / `onChange` are caught and logged as `[ModMenu] callback error: ...`.
 10. **Hot-reload** — `ModRef` shared vars (`NextInstanceId`, key claims, open count) are **not** cleared on Ctrl+R.
 
+### Known limits
+
+- Game-specific software cursors (custom glyphs, UIPage stacks) are **host responsibility**. If the engine cursor is suppressed, the host must show its own glyph.
+- No free-drag, CommonUI, or designer-authored WBP — dock presets + constructed UMG only.
+- Camera look is **not** locked unless `Init({ ignoreLook = true })`.
+
+---
+
+## Theming & polish
+
+Visual tokens, collapse, and tabs are planned in `vision.md`. Structure / extract map is in `plan.md`. Hosts keep the same `Init` / `Register` API while those land.
+
 ---
 
 ## Minimal standalone host
@@ -596,6 +613,8 @@ Ship `MyCheatMenu/` plus ModMenu from `npm run deploy` (`dist/ModMenu.zip` → e
 ## See also
 
 - Install / Nexus zip: `npm run deploy` → `dist/ModMenu.zip`
+- Architecture: `plan.md`
+- UX / theming: `vision.md`
 - Widget registry: `widgets/init.lua`
-- Public API / shell: `ModMenu.lua`
+- Public API facade: `ModMenu.lua`
 - Example game hosts (external): `DevToolsMasterMod` (multi-section), `TestMod` (minimal + key-conflict smoke flag)

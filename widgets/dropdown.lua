@@ -438,6 +438,14 @@ function Dropdown.pollHeaderClick(ctrl, ctx)
     return ToggleHeader(ctrl, ctx)
 end
 
+--- LMB latch: option rows first, then header.
+function Dropdown.pollClick(ctrl, ctx)
+    if Dropdown.pollOptionClick(ctrl, ctx) then
+        return true
+    end
+    return Dropdown.pollHeaderClick(ctrl, ctx)
+end
+
 function Dropdown.apply(ctrl, value, _ctx)
     if value == nil then
         ctrl.selectedValue = nil

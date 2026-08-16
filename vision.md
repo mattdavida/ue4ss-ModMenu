@@ -67,9 +67,12 @@ Reference feel: Silksong-style cheats UI — tabs, collapsible groups, checkbox 
 
 Goal: make the north star easy to work toward without re-discovering constraints.
 
+Architecture extract is done — see `plan.md`. Vision features (themes, collapse, tabs) can start.
+
 - [ ] Keep this file updated as phases complete
-- [ ] README: short “Theming & polish” stub linking here
-- [ ] README: known limits (custom game cursors; host must show glyph if engine cursor is suppressed)
+- [x] README: short “Theming & polish” stub linking here
+- [x] Architecture pointer (`plan.md`) in README + this file
+- [x] README: known limits (custom game cursors; host must show glyph if engine cursor is suppressed)
 - [ ] Maintain at least one simple host smoke section (DevTools-style) for visual checks on UE5 + one UE4 title when available
 
 **Exit:** contributors know what “done” looks like and what ModMenu will never own.
@@ -93,7 +96,7 @@ Goal: one day-ish pass that makes every control look intentional without changin
   - [ ] `sectionTitle`
   - [ ] padding / spacer scale (`padPanel`, `gapItem`, `gapSection`)
 - [ ] Pass theme through widget `ctx` (already has `config`)
-- [ ] Replace hardcoded colors in `ModMenu.lua` shell chrome + `widgets/*` + `core/umg.lua` helpers
+- [ ] Replace hardcoded colors in `shell/build.lua` + `widgets/*` + `core/umg.lua` helpers
 
 ### API sketch
 
@@ -220,7 +223,7 @@ Priority order:
 
 Each type:
 
-- [ ] `widgets/<type>.lua` + registry + `bundle.mjs` + README fields
+- [ ] `widgets/<type>.lua` + registry + README fields (`widgets/*.lua` are auto-bundled)
 - [ ] Theme-token styling
 - [ ] Smoke Register example
 
@@ -279,7 +282,7 @@ Goal: meaningful “finished” for the north-star journey.
 
 | Phase | Name                 | Status |
 |-------|----------------------|--------|
-| 0     | Foundation docs      | Not started |
+| 0     | Foundation docs      | Done (docs) |
 | 1     | Theme tokens         | Not started |
 | 2     | Collapsible sections | Not started |
 | 3     | Control polish       | Not started |
