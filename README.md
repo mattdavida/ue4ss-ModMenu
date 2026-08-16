@@ -83,6 +83,8 @@ ModMenu.Init({
     key = Key.F6,
     keyHint = "F6",
     dock = "left", -- "left" | "right"
+    -- inputBackend = "engine", -- opt-in when RegisterKeyBind does not fire
+    -- consoleCommand = "modmenu",
 })
 
 MyFeature.RegisterMenu(ModMenu)
@@ -171,17 +173,33 @@ Configure and bind this mod’s shell. Safe to call more than once (updates conf
 |--------|---------|--------|
 | `title` | `"Mod Menu"` | Header title |
 | `instanceId` | `"iN"` | FName tag; set once before first shell create (e.g. `"TestMod"`) |
-| `key` | `Key.F6` | Toggle key (use a unique key per mod) |
+| `key` | `Key.F6` | Toggle key for the `ue4ss` backend (use a unique key per mod) |
 | `keyHint` | `"F6"` | Shown in the header hint |
+| `keyName` | from `keyHint` | Unreal `FKey` name for the `engine` backend (e.g. `"F7"`). Required when `keyHint` is not a plain name. |
+| `inputBackend` | `"ue4ss"` | `"ue4ss"` (RegisterKeyBind) or `"engine"` (poll `IsInputKeyDown`). Opt-in — no auto-detect. Same backend for toggle **and** LMB. |
+| `consoleCommand` | `nil` | Optional. Registers `name [toggle/open/close]`. Do not also register the same command in the host. |
 | `dock` | `"right"` | `"left"` \| `"right"` |
 | `widthFrac` | `0.32` | Panel width as % of viewport |
 | `topFrac` / `bottomFrac` | `0.05` | Vertical margins |
 | `rightFrac` | `0.01` | Edge margin (both docks) |
-| `fontTitle` / `fontHint` / `fontItem` / `fontSection` / `fontDropdown` | 32 / 20 / 24 / 26 / 22 | Optional. `fontDropdown` is header + option rows; match `fontItem` to size dropdowns like buttons. |
+| `fontTitle` / `fontHint` / `fontItem` / `fontSection` / `fontDropdown` | 22 / 14 / 16 / 18 / 15 | Optional. Compact defaults (scale up per-game if needed). `fontDropdown` is header + option rows; match `fontItem` to size dropdowns like buttons. |
 | `canOpen` | `nil` | Optional `function(): boolean` or `false, "reason"`. Gates **open** (key toggle + `ModMenu.Open`); close is never gated. Pass `false` on a later `Init` to clear. |
 | `ignoreLook` | `false` | Opt-in. While open, `SetIgnoreLookInput(true)` so mouse-look games do not spin the camera. Default off — hosts that need a locked camera must pass `true`. |
 
-Also installs viewport hooks, LMB click latch, and the toggle keybind.
+Also installs viewport hooks and the input backend (`core/input.lua`): toggle + LMB click latch. Default `ue4ss` uses `RegisterKeyBind`. Pass `inputBackend = "engine"` on games where those binds never fire (e.g. Code Vein 2); that polls Unreal `IsInputKeyDown` for the toggle key and left mouse.
+
+```lua
+-- Games where RegisterKeyBind does not fire:
+ModMenu.Init({
+    title = "My Cheats",
+    key = Key.F7,
+    keyHint = "F7",
+    keyName = "F7",
+    inputBackend = "engine",
+    consoleCommand = "modmenu",
+    ignoreLook = true,
+})
+```
 
 ```lua
 -- Keep F7 bound, but only open when another menu allows it:
@@ -527,8 +545,8 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 ## Behaviour notes (for integrators)
 
 1. **Per-mod shell** — each Lua mod has its own ModMenu state (`require` is not shared across mods). Multiple mods may each `Init` an independent panel. UObject roots are named `ModMenu_Root_<instanceId>_<n>` using a `ModRef` serial (`ModMenu.NextInstanceId`) so they never collide under `GameInstance`.
-2. **Toggle keys** — prefer a unique `key` / `keyHint` per mod. Claims are stored as `ModMenu.KeyClaim.<keyHint>`; clashes log **KEY CONFLICT**. UE4SS may fire every binder on that key (both menus toggle — useful for same-author dual docks, confusing for unrelated mods).
-3. **Input** — while open, uses GameAndUI + mouse cursor. Clicks use LMB keybind latch + `IsHovered()` (not UE `OnClicked` alone). Closing one menu does not force GameOnly while another ModMenu is still open (`ModMenu.OpenCount`). `ClientRestart` / `DestroyShell` do not touch input unless this instance had the menu open. On close, `GameOnly` is applied only if the game had no cursor when we opened (mouse-look); hub/inventory cursors are left alone. Camera look is **not** locked unless `Init({ ignoreLook = true })`.
+2. **Toggle keys** — prefer a unique `key` / `keyHint` per mod. Claims are stored as `ModMenu.KeyClaim.<keyHint>`; clashes log **KEY CONFLICT**. On the `ue4ss` backend, UE4SS may fire every binder on that key (both menus toggle — useful for same-author dual docks, confusing for unrelated mods). On `engine`, each shell polls independently.
+3. **Input** — while open, uses GameAndUI + mouse cursor. Buttons / dock / dropdowns fire from `UButton:IsPressed()` (rising edge, 16ms poll) plus the LMB latch + `IsHovered()` fallback. Checkboxes poll persistent `IsChecked()` and do not need either. The toggle key uses `Init inputBackend`: `ue4ss` (`RegisterKeyBind`) or `engine` (poll `IsInputKeyDown`). PlayerController often does **not** see LMB while Slate owns the mouse, so engine-backend menus must not rely on the LMB latch alone. Closing one menu does not force GameOnly while another ModMenu is still open (`ModMenu.OpenCount`). `ClientRestart` / `DestroyShell` do not touch input unless this instance had the menu open. On close, `GameOnly` is applied only if the game had no cursor when we opened (mouse-look); hub/inventory cursors are left alone. Camera look is **not** locked unless `Init({ ignoreLook = true })`.
 4. **Dock** — left/right presets only (header button + `SetDock`). No free drag. Session only (not saved to disk).
 5. **Scroll** — the docked panel is a fixed viewport; section content lives in a ScrollBox (mouse wheel). Use `labelWidth` on `number` / `textinput` so amount rows line up like a table.
 6. **FNames** — shell names include `instanceId`; content rebuilds bump an internal generation after `ClearChildren`. Prefer `SetOptions` on searchable lists over constant full rebuilds.

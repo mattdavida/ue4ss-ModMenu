@@ -7,7 +7,7 @@ local Util = require("ModMenu.core.util")
 local M = {}
 
 local defaults = {
-    fontItem = 24,
+    fontItem = 16,
 }
 
 function M.SetDefaults(opts)
@@ -266,6 +266,10 @@ function M.CreateTextButton(outer, namePrefix, caption, bgColor, textColor, font
     pcall(function()
         button:SetContent(label)
         button:SetBackgroundColor(bgColor or { R = 0.18, G = 0.22, B = 0.32, A = 1.0 })
+        -- MouseDown: pressed state as soon as the pointer goes down (helps IsPressed poll).
+        if button.SetClickMethod then
+            button:SetClickMethod(1)
+        end
     end)
     return button, label
 end

@@ -4,6 +4,7 @@
   Usage:
     local ModMenu = require("ModMenu.ModMenu")
     ModMenu.Init({ title = "My Mod Menu", key = Key.F6 }) -- ignoreLook = true to lock camera
+    -- inputBackend = "engine" when RegisterKeyBind does not fire (e.g. Code Vein 2)
     ModMenu.Register({
       id = "MyMod",
       title = "My Mod",
@@ -51,7 +52,7 @@ local Dropdown = Widgets.get("dropdown")
 local ModMenu = {}
 
 local VIEWPORT_Z_BASE = 1000
-local POLL_MS = 50
+local POLL_MS = 16
 
 local VIS_VISIBLE = 0
 local VIS_COLLAPSED = 1
@@ -91,14 +92,17 @@ local config = {
     topFrac = 0.05,
     bottomFrac = 0.05,
     rightFrac = 0.01, -- edge margin used for both left and right docks
-    fontTitle = 32,
-    fontHint = 20,
-    fontItem = 24,
-    fontSection = 26,
-    fontDropdown = 22,
+    fontTitle = 22,
+    fontHint = 14,
+    fontItem = 16,
+    fontSection = 18,
+    fontDropdown = 15,
     instanceId = nil, -- optional human tag for FNames / Live View (e.g. "TestMod")
     canOpen = nil, -- optional fun(): boolean|boolean,string — gate Open / key toggle open
     ignoreLook = false, -- opt-in: SetIgnoreLookInput while open (mouse-look games)
+    inputBackend = "ue4ss", -- "ue4ss" | "engine" (opt-in; no auto-detect)
+    keyName = nil, -- Unreal FKey name for engine backend (e.g. "F7"); defaults from keyHint
+    consoleCommand = nil, -- optional console command (toggle|open|close)
 }
 
 local sections = {} ---@type table[]
@@ -115,7 +119,6 @@ local contentGen = 0
 local pollHandle = nil
 local initialized = false
 local hooksInstalled = false
-local keyBound = false
 
 --- Stable per Lua-state ModMenu; allocated once via ModRef (or opts.instanceId).
 local instanceSerial = nil ---@type integer?
@@ -595,14 +598,14 @@ local function BuildContent()
     SetLabelText(title, config.title)
     contentBox:AddChildToVerticalBox(title)
 
-    local keyName = "F6"
-    if config.key ~= nil then
-        -- Best-effort display; Key table values are often the VK name string/number.
-        keyName = tostring(config.keyHint or "F6")
+    local keyName = tostring(config.keyHint or config.keyName or "F6")
+    local hintText = "[" .. keyName .. "] toggle menu"
+    if type(config.consoleCommand) == "string" and config.consoleCommand ~= "" then
+        hintText = hintText .. " · " .. config.consoleCommand
     end
     local hint = Construct("/Script/UMG.TextBlock", contentBox, "ModMenu_Hint_" .. suffix)
     StyleText(hint, config.fontHint)
-    SetLabelText(hint, "[" .. keyName .. "] toggle menu")
+    SetLabelText(hint, hintText)
     contentBox:AddChildToVerticalBox(hint)
 
     -- Shell chrome: flip Left/Right dock without rebuilding the panel.
@@ -748,11 +751,19 @@ end
 local function PollControls()
     local ctx = MakeWidgetCtx()
 
-    -- Continuous polls (search filter, checkbox state).
+    -- Continuous polls (search filter, checkbox state, UButton IsPressed).
     for _, ctrl in ipairs(liveControls) do
-        local widget = Widgets.get(ctrl.kind)
-        if widget and widget.poll then
-            widget.poll(ctrl, ctx)
+        if ctrl.kind == "dock" then
+            if Input.WidgetPressedEdge(ctrl, ctrl.widget) then
+                SetDockInternal(config.dock == "left" and "right" or "left")
+                ReclaimMenuInput()
+                Input.IgnoreClicks(2)
+            end
+        else
+            local widget = Widgets.get(ctrl.kind)
+            if widget and widget.poll then
+                widget.poll(ctrl, ctx)
+            end
         end
     end
 
@@ -925,22 +936,53 @@ local function ClaimToggleKey(keyHint)
     SharedSet(claimKey, me)
 end
 
-local function BindToggleKey()
-    if keyBound then
-        return
+local function NormalizeInputBackend(value)
+    if value == nil then
+        return "ue4ss"
     end
+    if value == "ue4ss" or value == "engine" then
+        return value
+    end
+    error('ModMenu.Init: inputBackend must be "ue4ss" or "engine"')
+end
+
+local function ResolveEngineKeyName()
+    if type(config.keyName) == "string" and config.keyName ~= "" then
+        return config.keyName
+    end
+    local hint = tostring(config.keyHint or "")
+    if hint:match("^[%w]+$") then
+        return hint
+    end
+    return nil
+end
+
+local function InstallInput()
     local key = config.key or Key.F6
     config.key = key
     if config.keyHint == nil and key == Key.F6 then
         config.keyHint = "F6"
     end
+    config.keyName = ResolveEngineKeyName() or config.keyName
+    if config.inputBackend == "engine" and (type(config.keyName) ~= "string" or config.keyName == "") then
+        error('ModMenu.Init: keyName is required when inputBackend is "engine" (Unreal FKey name, e.g. "F7")')
+    end
+    if config.inputBackend ~= "engine" and (type(config.keyName) ~= "string" or config.keyName == "") then
+        config.keyName = tostring(config.keyHint or "F6")
+    end
     ClaimToggleKey(config.keyHint or tostring(key))
-    RegisterKeyBind(key, function()
-        ExecuteInGameThread(function()
-            ToggleInternal()
-        end)
-    end)
-    keyBound = true
+    Input.Install({
+        backend = config.inputBackend,
+        key = key,
+        keyName = config.keyName,
+        onToggle = ToggleInternal,
+        onOpen = OpenInternal,
+        onClose = CloseInternal,
+        isMenuOpen = function()
+            return menuOpen == true
+        end,
+        consoleCommand = config.consoleCommand,
+    })
 end
 
 --- Initialize / configure this mod's shell. Safe to call multiple times.
@@ -969,6 +1011,24 @@ function ModMenu.Init(opts)
     if opts.ignoreLook ~= nil then
         config.ignoreLook = opts.ignoreLook == true
     end
+    if opts.inputBackend ~= nil then
+        config.inputBackend = NormalizeInputBackend(opts.inputBackend)
+    end
+    if opts.keyName ~= nil then
+        if type(opts.keyName) ~= "string" or opts.keyName == "" then
+            error("ModMenu.Init: keyName must be a non-empty string")
+        end
+        config.keyName = opts.keyName
+    end
+    if opts.consoleCommand ~= nil then
+        if opts.consoleCommand == false or opts.consoleCommand == "" then
+            config.consoleCommand = nil
+        elseif type(opts.consoleCommand) ~= "string" then
+            error("ModMenu.Init: consoleCommand must be a string or false")
+        else
+            config.consoleCommand = opts.consoleCommand
+        end
+    end
     -- Human-readable FName tag (Live View). Locked after first EnsureInstanceIdentity.
     if opts.instanceId ~= nil and instanceTag == nil then
         config.instanceId = opts.instanceId
@@ -978,22 +1038,21 @@ function ModMenu.Init(opts)
         config.key = Key.F6
         config.keyHint = config.keyHint or "F6"
     end
+    config.inputBackend = NormalizeInputBackend(config.inputBackend)
 
     EnsureInstanceIdentity()
     Umg.SetDefaults({ fontItem = config.fontItem })
     InstallHooks()
-    BindToggleKey()
-    Input.InstallMouseClickLatch(function()
-        return menuOpen == true
-    end)
+    InstallInput()
     initialized = true
     -- Re-apply dock if shell already exists (Init can be called again).
     ApplyPercentLayout(panelSlot)
     SyncDockChrome()
     Log(string.format(
-        "Init — title=%q key=%s dock=%s instance=%q serial=%s z=%d",
+        "Init — title=%q key=%s backend=%s dock=%s instance=%q serial=%s z=%d",
         tostring(config.title),
         tostring(config.keyHint or config.key),
+        tostring(config.inputBackend),
         tostring(config.dock),
         tostring(instanceTag),
         tostring(instanceSerial),
