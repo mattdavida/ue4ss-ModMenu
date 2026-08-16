@@ -38,6 +38,27 @@ function Button.build(ctx)
     })
 end
 
+--- Fire onClick. Shared by IsPressed poll and LMB-latch pollClick.
+local function FireClick(ctrl, ctx)
+    ctx.SafeCall(ctrl.item.onClick)
+    ctx.ReclaimMenuInput()
+    ctx.Input.IgnoreClicks(2)
+    ExecuteWithDelay(200, function()
+        ctx.ReclaimMenuInput()
+    end)
+    return true
+end
+
+--- Continuous press poll — does not need the global LMB latch (engine / GameAndUI).
+function Button.poll(ctrl, ctx)
+    if ctrl.enabled == false then
+        return
+    end
+    if ctx.Input.WidgetPressedEdge(ctrl, ctrl.widget) then
+        FireClick(ctrl, ctx)
+    end
+end
+
 --- @return boolean true if click consumed
 function Button.pollClick(ctrl, ctx)
     if ctrl.enabled == false then
@@ -46,12 +67,7 @@ function Button.pollClick(ctrl, ctx)
     if not ctx.Input.WidgetHovered(ctrl.widget) then
         return false
     end
-    ctx.SafeCall(ctrl.item.onClick)
-    ctx.ReclaimMenuInput()
-    ExecuteWithDelay(200, function()
-        ctx.ReclaimMenuInput()
-    end)
-    return true
+    return FireClick(ctrl, ctx)
 end
 
 return Button

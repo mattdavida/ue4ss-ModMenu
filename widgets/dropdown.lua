@@ -44,7 +44,7 @@ local function RebuildRows(ctrl)
     local filter = ctrl.searchFilter or ""
     local matched = 0
     local shown = 0
-    local fontDropdown = ctrl.fontDropdown or 22
+    local fontDropdown = ctrl.fontDropdown or 15
 
     for _, opt in ipairs(ctrl.list or {}) do
         if Options.OptionMatchesFilter(opt.label, filter) then
@@ -66,6 +66,7 @@ local function RebuildRows(ctrl)
                     label = lbl,
                     optLabel = opt.label,
                     optValue = opt.value,
+                    wasPressed = false,
                 })
             end
         end
@@ -133,8 +134,8 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
         or (searchable and DROPDOWN_SEARCHABLE_MAX_ROWS or 9999)
     local listMaxHeight = dropOpts.listMaxHeight or DROPDOWN_LIST_MAX_HEIGHT
     local allowEmpty = dropOpts.allowEmpty == true or searchable or dropOpts.placeholder ~= nil
-    local fontDropdown = config.fontDropdown or 22
-    local fontHint = config.fontHint or 20
+    local fontDropdown = config.fontDropdown or 15
+    local fontHint = config.fontHint or 14
 
     local list, labelToValue, valueToLabel = Options.NormalizeOptions(options)
     selectedValue = Util.ToPlainString(selectedValue) or selectedValue
@@ -153,6 +154,9 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
     local headerBtn = Umg.Construct("/Script/UMG.Button", root, namePrefix .. "_Header_Btn")
     pcall(function()
         headerBtn:SetBackgroundColor(HEADER_BG)
+        if headerBtn.SetClickMethod then
+            headerBtn:SetClickMethod(1)
+        end
     end)
     local headerRow = Umg.Construct("/Script/UMG.HorizontalBox", headerBtn, namePrefix .. "_HeaderRow")
 
@@ -364,14 +368,51 @@ function Dropdown.build(ctx)
     })
 end
 
---- Filter text poll while expanded.
-function Dropdown.poll(ctrl, _ctx)
+local function SelectOption(ctrl, ctx, row)
+    local value = row.optValue
+    ctrl.selectedValue = value
+    ctrl.selectedLabel = tostring(row.optLabel or value)
+    ctx.values[ctrl.valueKey] = value
+    SetExpanded(ctrl, false)
+    Input.IgnoreClicks(2)
+    ctx.SafeCall(ctrl.item.onChange, value)
+    ctx.ReclaimMenuInput()
+    ctx.EnsureMenuVisible()
+end
+
+local function ToggleHeader(ctrl, ctx)
+    if Input.WidgetHovered(ctrl.searchBox) then
+        return false
+    end
+    local nextExpanded = not ctrl.expanded
+    if nextExpanded then
+        Dropdown.collapseAll(ctx.liveControls, ctrl)
+    end
+    SetExpanded(ctrl, nextExpanded)
+    Input.IgnoreClicks(2)
+    return true
+end
+
+--- Filter text poll while expanded + native UButton press (no LMB latch).
+function Dropdown.poll(ctrl, ctx)
     if ctrl.searchable and ctrl.expanded and ctrl.searchBox ~= nil then
         local text = Options.GetWidgetPlainText(ctrl.searchBox)
         if text ~= ctrl.searchFilter then
             ctrl.searchFilter = text
             RebuildRows(ctrl)
         end
+    end
+
+    if ctrl.expanded and ctrl.optionRows then
+        for _, row in ipairs(ctrl.optionRows) do
+            if Input.WidgetPressedEdge(row, row.button) then
+                SelectOption(ctrl, ctx, row)
+                return
+            end
+        end
+    end
+    if Input.WidgetPressedEdge(ctrl, ctrl.headerBtn, "headerWasPressed") then
+        ToggleHeader(ctrl, ctx)
     end
 end
 
@@ -382,15 +423,7 @@ function Dropdown.pollOptionClick(ctrl, ctx)
     end
     for _, row in ipairs(ctrl.optionRows) do
         if Input.WidgetHovered(row.button) then
-            local value = row.optValue
-            ctrl.selectedValue = value
-            ctrl.selectedLabel = tostring(row.optLabel or value)
-            ctx.values[ctrl.valueKey] = value
-            SetExpanded(ctrl, false)
-            Input.IgnoreClicks(1)
-            ctx.SafeCall(ctrl.item.onChange, value)
-            ctx.ReclaimMenuInput()
-            ctx.EnsureMenuVisible()
+            SelectOption(ctrl, ctx, row)
             return true
         end
     end
@@ -399,18 +432,10 @@ end
 
 --- Header toggle click. Returns true if consumed.
 function Dropdown.pollHeaderClick(ctrl, ctx)
-    if Input.WidgetHovered(ctrl.searchBox) then
-        return false
-    end
     if not (Input.WidgetHovered(ctrl.headerBtn) or Input.WidgetHovered(ctrl.headerLabel)) then
         return false
     end
-    local nextExpanded = not ctrl.expanded
-    if nextExpanded then
-        Dropdown.collapseAll(ctx.liveControls, ctrl)
-    end
-    SetExpanded(ctrl, nextExpanded)
-    return true
+    return ToggleHeader(ctrl, ctx)
 end
 
 function Dropdown.apply(ctrl, value, _ctx)
