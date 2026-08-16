@@ -177,7 +177,7 @@ Configure and bind this mod’s shell. Safe to call more than once (updates conf
 | `widthFrac` | `0.32` | Panel width as % of viewport |
 | `topFrac` / `bottomFrac` | `0.05` | Vertical margins |
 | `rightFrac` | `0.01` | Edge margin (both docks) |
-| `fontTitle` / `fontHint` / `fontItem` / `fontSection` | 32 / 20 / 24 / 26 | Optional |
+| `fontTitle` / `fontHint` / `fontItem` / `fontSection` / `fontDropdown` | 32 / 20 / 24 / 26 / 22 | Optional. `fontDropdown` is header + option rows; match `fontItem` to size dropdowns like buttons. |
 | `canOpen` | `nil` | Optional `function(): boolean` or `false, "reason"`. Gates **open** (key toggle + `ModMenu.Open`); close is never gated. Pass `false` on a later `Init` to clear. |
 | `ignoreLook` | `false` | Opt-in. While open, `SetIgnoreLookInput(true)` so mouse-look games do not spin the camera. Default off — hosts that need a locked camera must pass `true`. |
 
