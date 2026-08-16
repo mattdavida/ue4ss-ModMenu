@@ -5,6 +5,14 @@
     1. Create widgets/<type>.lua exporting { type, validate?, seed?, build, poll?, pollClick?, apply? }
     2. register(require("ModMenu.widgets.<type>")) below
     3. Document fields in README
+
+  widgets/*.lua are auto-bundled; core/ and shell/ still need a MODULES row
+  in tools/bundle.mjs.
+
+  ctx fields (build / poll / pollClick / apply):
+    values, liveControls, config, umg, Input, ValueKey, SafeCall, IsValid,
+    ReclaimMenuInput, EnsureMenuVisible, contentBox, section, item, namePrefix,
+    layout (nil or "horizontal" inside a row)
 ]]
 
 local registry = {} ---@type table<string, table>

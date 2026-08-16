@@ -41,920 +41,62 @@
   Internals: core/ helpers + widgets/ registry (see README.md).
 ]]
 
-local UEHelpers = require("UEHelpers.UEHelpers")
 local Util = require("ModMenu.core.util")
 local Umg = require("ModMenu.core.umg")
 local Input = require("ModMenu.core.input")
-local Options = require("ModMenu.core.options")
-local Widgets = require("ModMenu.widgets.init")
-local Dropdown = Widgets.get("dropdown")
+local Config = require("ModMenu.core.config")
+local Instance = require("ModMenu.core.instance")
+local InputMode = require("ModMenu.core.inputmode")
+local Session = require("ModMenu.shell.session")
+local Dock = require("ModMenu.shell.dock")
+local Lifecycle = require("ModMenu.shell.lifecycle")
+local Registry = require("ModMenu.shell.registry")
 
 local ModMenu = {}
 
-local VIEWPORT_Z_BASE = 1000
-local POLL_MS = 16
-
-local VIS_VISIBLE = 0
-local VIS_COLLAPSED = 1
-
---- Process-wide keys (ModRef shared vars). Survive hot-reload; do not store tables/functions.
-local SHARED_NEXT_INSTANCE = "ModMenu.NextInstanceId"
-local SHARED_OPEN_COUNT = "ModMenu.OpenCount"
---- Claim map: ModMenu.KeyClaim.<keyHint> -> instanceTag (string). Warn-only on clash.
-local SHARED_KEY_CLAIM_PREFIX = "ModMenu.KeyClaim."
---- Stashed PlayerController input flags while any ModMenu is open (scalars only — ModRef).
-local SHARED_INPUT_SAVED = "ModMenu.InputSaved"
-local SHARED_SAVED_SHOW_CURSOR = "ModMenu.Saved.bShowMouseCursor"
-local SHARED_SAVED_CLICK = "ModMenu.Saved.bEnableClickEvents"
-local SHARED_SAVED_HOVER = "ModMenu.Saved.bEnableMouseOverEvents"
-local SHARED_SAVED_LOOK_BUMP = "ModMenu.Saved.LookIgnoreBump"
-
--- Local aliases for shell chrome / public API.
 local Log = Util.Log
-local IsValid = Util.IsValid
-local ToPlainString = Util.ToPlainString
-local ValueKey = Util.ValueKey
-local SafeCall = Util.SafeCall
-local ConsumeMouseClick = Input.ConsumeMouseClick
-local WidgetHovered = Input.WidgetHovered
-local Construct = Umg.Construct
-local StyleText = Umg.StyleText
-local SetLabelText = Umg.SetLabelText
-local AddSpacer = Umg.AddSpacer
-local CreateTextButton = Umg.CreateTextButton
-local NormalizeOptions = Options.NormalizeOptions
 
-local config = {
-    title = "Mod Menu",
-    key = nil, -- set in Init; default Key.F6
-    dock = "right", -- "left" | "right" (session preset; no free drag)
-    widthFrac = 0.32,
-    topFrac = 0.05,
-    bottomFrac = 0.05,
-    rightFrac = 0.01, -- edge margin used for both left and right docks
-    fontTitle = 22,
-    fontHint = 14,
-    fontItem = 16,
-    fontSection = 18,
-    fontDropdown = 15,
-    instanceId = nil, -- optional human tag for FNames / Live View (e.g. "TestMod")
-    canOpen = nil, -- optional fun(): boolean|boolean,string — gate Open / key toggle open
-    ignoreLook = false, -- opt-in: SetIgnoreLookInput while open (mouse-look games)
-    inputBackend = "ue4ss", -- "ue4ss" | "engine" (opt-in; no auto-detect)
-    keyName = nil, -- Unreal FKey name for engine backend (e.g. "F7"); defaults from keyHint
-    consoleCommand = nil, -- optional console command (toggle|open|close)
-}
-
-local sections = {} ---@type table[]
-local sectionIndexById = {} ---@type table<string, integer>
-local values = {} ---@type table<string, any>
-
-local menuRoot = nil
-local contentBox = nil ---@type UVerticalBox?
-local panelSlot = nil ---@type UCanvasPanelSlot? kept so SetDock can re-anchor without rebuild
-local menuOpen = false
-local createAttempts = 0
---- Bumped on every BuildContent — ClearChildren does not free FNames; reuse = zombie widgets.
-local contentGen = 0
-local pollHandle = nil
-local initialized = false
-local hooksInstalled = false
-
---- Stable per Lua-state ModMenu; allocated once via ModRef (or opts.instanceId).
-local instanceSerial = nil ---@type integer?
-local instanceTag = nil ---@type string?
-local viewportZ = VIEWPORT_Z_BASE
---- True while this instance has incremented SHARED_OPEN_COUNT.
-local openCountHeld = false
-
---- Runtime widgets rebuilt each Open / Register-while-open.
-local liveControls = {} ---@type table[]
+local config = Config.New()
 
 --- Callbacks fired after the menu finishes opening (feature modules use for lazy init).
 local onOpenCallbacks = {} ---@type function[]
 
-local function SharedGet(name)
-    if ModRef == nil then
-        return nil
-    end
-    local ok, value = pcall(function()
-        return ModRef:GetSharedVariable(name)
-    end)
-    if ok then
-        return value
-    end
-    return nil
-end
+local initialized = false
 
-local function SharedSet(name, value)
-    if ModRef == nil then
-        return false
-    end
-    local ok = pcall(function()
-        ModRef:SetSharedVariable(name, value)
-    end)
-    return ok == true
-end
+local S = Session.New({
+    config = config,
+    sections = {},
+    values = {},
+    onOpenCallbacks = onOpenCallbacks,
+})
 
-local function SanitizeTag(raw)
-    local s = tostring(raw or "mod"):gsub("[^%w_]", "_")
-    if s == "" then
-        s = "mod"
-    end
-    -- FName-friendly length; keep Live View readable.
-    if #s > 48 then
-        s = string.sub(s, 1, 48)
-    end
-    return s
-end
+InputMode.Bind({
+    getMenuRoot = function()
+        return S.menuRoot
+    end,
+    getIgnoreLook = function()
+        return S.config.ignoreLook == true
+    end,
+    isMenuOpen = function()
+        return S.menuOpen == true
+    end,
+})
 
---- Allocate a process-wide instance id so UObject names never collide across mods.
-local function EnsureInstanceIdentity()
-    if instanceSerial ~= nil and instanceTag ~= nil then
-        return
-    end
-
-    local nextId = SharedGet(SHARED_NEXT_INSTANCE)
-    if type(nextId) ~= "number" then
-        nextId = 0
-    end
-    nextId = nextId + 1
-    if not SharedSet(SHARED_NEXT_INSTANCE, nextId) then
-        -- No ModRef (unexpected): fall back to a local-only id (single-mod safe).
-        nextId = (createAttempts > 0 and createAttempts or 1)
-        Log("WARNING: ModRef shared vars unavailable — instance id may collide across mods")
-    end
-    instanceSerial = nextId
-
-    local tag = config.instanceId
-    if tag == nil or tostring(tag) == "" then
-        tag = "i" .. tostring(instanceSerial)
-    end
-    instanceTag = SanitizeTag(tag)
-    viewportZ = VIEWPORT_Z_BASE + (instanceSerial - 1)
-
-    Log(string.format(
-        "Instance identity serial=%d tag=%q viewportZ=%d",
-        instanceSerial,
-        instanceTag,
-        viewportZ
-    ))
-end
-
-local function ShellNameSuffix()
-    EnsureInstanceIdentity()
-    return string.format("%s_%d", instanceTag, createAttempts)
-end
-
-local function AdjustOpenCount(delta)
-    local n = SharedGet(SHARED_OPEN_COUNT)
-    if type(n) ~= "number" then
-        n = 0
-    end
-    n = math.max(0, n + delta)
-    SharedSet(SHARED_OPEN_COUNT, n)
-    return n
-end
-
-local function NoteMenuOpened()
-    if openCountHeld then
-        return
-    end
-    AdjustOpenCount(1)
-    openCountHeld = true
-end
-
-local function NoteMenuClosed()
-    if not openCountHeld then
-        return AdjustOpenCount(0)
-    end
-    openCountHeld = false
-    return AdjustOpenCount(-1)
-end
-
-local function EnsureMenuVisible()
-    if menuOpen and IsValid(menuRoot) then
-        pcall(function()
-            menuRoot:SetVisibility(VIS_VISIBLE)
-        end)
-    end
-end
-
-local function IsMenuVisible()
-    if not IsValid(menuRoot) then
-        return false
-    end
-    local ok, vis = pcall(function()
-        return menuRoot:GetVisibility()
-    end)
-    return ok and vis == VIS_VISIBLE
-end
-
-local function ValidateItem(item, sectionId, index)
-    local prefix = string.format("Register(%s) items[%d]", tostring(sectionId), index)
-    if type(item) ~= "table" then
-        error(prefix .. " must be a table")
-    end
-    local t = item.type
-    local widget = Widgets.get(t)
-    if not widget then
-        error(prefix .. " unsupported type '" .. tostring(t) .. "' (" .. Widgets.typeList() .. ")")
-    end
-    if widget.validate then
-        widget.validate(item, sectionId, index)
-    end
-end
-
---- Walk top-level + row.children items (depth 1 nesting).
-local function FindItemById(items, itemId, typeName)
-    for _, item in ipairs(items or {}) do
-        if item.id == itemId and (typeName == nil or item.type == typeName) then
-            return item
-        end
-        if item.type == "row" and type(item.items) == "table" then
-            for _, child in ipairs(item.items) do
-                if child.id == itemId and (typeName == nil or child.type == typeName) then
-                    return child
-                end
-            end
-        end
-    end
-    return nil
-end
-
-local function ValidateSection(section)
-    if type(section) ~= "table" then
-        error("Register() expects a section table")
-    end
-    if section.id == nil or section.id == "" then
-        error("Register() section requires .id")
-    end
-    if type(section.items) ~= "table" then
-        error("Register(" .. tostring(section.id) .. ") requires .items array")
-    end
-    for i, item in ipairs(section.items) do
-        ValidateItem(item, section.id, i)
-    end
-end
-
-local function StopPoll()
-    if pollHandle then
-        pcall(function()
-            CancelDelayedAction(pollHandle)
-        end)
-        pollHandle = nil
-    end
-end
-
--- UE5 added trailing bFlushInput to SetInputMode_*; UE4.27 rejects the extra arg.
--- Cache after first successful call so we don't pcall-probe every open/close.
-local inputModeFlushArity = nil ---@type "withFlush"|"noFlush"|nil
-
---- GameAndUI with DoNotLock; try UE5 (5 args) then UE4 (4 args).
-local function ApplyGameAndUI(lib, pc)
-    -- EMouseLockMode::DoNotLock = 0
-    if inputModeFlushArity == "withFlush" then
-        lib:SetInputMode_GameAndUIEx(pc, menuRoot, 0, false, false)
-        return
-    end
-    if inputModeFlushArity == "noFlush" then
-        lib:SetInputMode_GameAndUIEx(pc, menuRoot, 0, false)
-        return
-    end
-    local ok = pcall(function()
-        lib:SetInputMode_GameAndUIEx(pc, menuRoot, 0, false, false)
-    end)
-    if ok then
-        inputModeFlushArity = "withFlush"
-        return
-    end
-    lib:SetInputMode_GameAndUIEx(pc, menuRoot, 0, false)
-    inputModeFlushArity = "noFlush"
-end
-
---- GameOnly; try UE5 (pc + flush) then UE4 (pc only).
-local function ApplyGameOnly(lib, pc)
-    if inputModeFlushArity == "withFlush" then
-        lib:SetInputMode_GameOnly(pc, false)
-        return
-    end
-    if inputModeFlushArity == "noFlush" then
-        lib:SetInputMode_GameOnly(pc)
-        return
-    end
-    local ok = pcall(function()
-        lib:SetInputMode_GameOnly(pc, false)
-    end)
-    if ok then
-        inputModeFlushArity = "withFlush"
-        return
-    end
-    lib:SetInputMode_GameOnly(pc)
-    inputModeFlushArity = "noFlush"
-end
-
---- Force a usable cursor for mouse-look games (no default UI cursor).
---- SetIgnoreLookInput is refcounted in UE. Re-bump if the game clears ignore while open;
---- if IsLookInputIgnored can't be probed, bump at most once (LOOK_BUMP).
-local function EnsureLookIgnored(pc)
-    local ignored = false
-    local probeOk = pcall(function()
-        ignored = pc:IsLookInputIgnored() == true
-    end)
-    if probeOk then
-        if ignored then
-            return
-        end
-        -- Look not ignored (first open, or game cleared it) — bump and remember for restore.
-    elseif SharedGet(SHARED_SAVED_LOOK_BUMP) == true then
-        return
-    end
-    local ok = pcall(function()
-        pc:SetIgnoreLookInput(true)
-    end)
-    if ok then
-        SharedSet(SHARED_SAVED_LOOK_BUMP, true)
-    end
-end
-
-local function ForceMenuCursor(pc)
-    if SharedGet(SHARED_INPUT_SAVED) ~= true then
-        SharedSet(SHARED_SAVED_SHOW_CURSOR, pc.bShowMouseCursor == true)
-        SharedSet(SHARED_SAVED_CLICK, pc.bEnableClickEvents == true)
-        SharedSet(SHARED_SAVED_HOVER, pc.bEnableMouseOverEvents == true)
-        SharedSet(SHARED_INPUT_SAVED, true)
-    end
-    pc.bShowMouseCursor = true
-    pc.bEnableClickEvents = true
-    pc.bEnableMouseOverEvents = true
-    if config.ignoreLook == true then
-        EnsureLookIgnored(pc)
-    end
-end
-
---- Restore PlayerController cursor/look flags when the last ModMenu closes.
---- If we never took over input, leave the game's cursor/mode alone
---- (ClientRestart / DestroyShell used to force cursor off and GameOnly,
---- which hides hub/inventory cursors on games like Witchfire).
-local function RestoreMenuCursor(pc)
-    if SharedGet(SHARED_INPUT_SAVED) ~= true then
-        return false
-    end
-    local wasShowingCursor = SharedGet(SHARED_SAVED_SHOW_CURSOR) == true
-    pc.bShowMouseCursor = wasShowingCursor
-    pc.bEnableClickEvents = SharedGet(SHARED_SAVED_CLICK) == true
-    pc.bEnableMouseOverEvents = SharedGet(SHARED_SAVED_HOVER) == true
-    if SharedGet(SHARED_SAVED_LOOK_BUMP) == true then
-        pcall(function()
-            pc:SetIgnoreLookInput(false)
-        end)
-    end
-    SharedSet(SHARED_INPUT_SAVED, false)
-    SharedSet(SHARED_SAVED_LOOK_BUMP, false)
-    return wasShowingCursor
-end
-
---- Show software cursor + GameAndUI (the mode that worked — white cursor).
---- On deactivate: only return to GameOnly when no other ModMenu instance is open.
----@param active boolean
----@param remainingOpenCount integer|nil when deactivating, open count after this instance released
-local function SetMenuInputActive(active, remainingOpenCount)
-    local pc = UEHelpers.GetPlayerController()
-    if not IsValid(pc) then
-        return
-    end
-
-    local ok, err = pcall(function()
-        local lib = StaticFindObject("/Script/UMG.Default__WidgetBlueprintLibrary")
-        if not IsValid(lib) then
-            return
-        end
-        if active then
-            ForceMenuCursor(pc)
-            ApplyGameAndUI(lib, pc)
-        else
-            local others = remainingOpenCount
-            if type(others) ~= "number" then
-                others = SharedGet(SHARED_OPEN_COUNT)
-                if type(others) ~= "number" then
-                    others = 0
-                end
-            end
-            if others > 0 then
-                -- Another mod's shell still open — do not yank GameAndUI / cursor.
-                ForceMenuCursor(pc)
-                return
-            end
-            -- Only GameOnly if we actually took over from mouse-look (saved cursor false).
-            -- If the game already had a cursor (hub / inventory), leave its input mode.
-            local hadSaved = SharedGet(SHARED_INPUT_SAVED) == true
-            local wasShowingCursor = RestoreMenuCursor(pc)
-            if hadSaved and wasShowingCursor ~= true then
-                ApplyGameOnly(lib, pc)
-            end
-        end
-    end)
-    if not ok then
-        Log("SetInputMode skipped: " .. tostring(err))
-    end
-end
-
---- Re-apply GameAndUI after game UI interrupts (amber toast, etc.).
---- Only call on open, after clicks, or when we detect the cursor was stolen — not every tick.
-local function ReclaimMenuInput()
-    if not menuOpen then
-        return
-    end
-    SetMenuInputActive(true)
-end
-
---- Shared ctx for widget build / poll / apply (after ReclaimMenuInput exists).
-local function MakeWidgetCtx()
+S.makeWidgetCtx = function()
     return {
-        values = values,
-        liveControls = liveControls,
-        config = config,
+        values = S.values,
+        liveControls = S.liveControls,
+        config = S.config,
         umg = Umg,
         Input = Input,
-        ValueKey = ValueKey,
-        SafeCall = SafeCall,
-        IsValid = IsValid,
-        ReclaimMenuInput = ReclaimMenuInput,
-        EnsureMenuVisible = EnsureMenuVisible,
+        ValueKey = Util.ValueKey,
+        SafeCall = Util.SafeCall,
+        IsValid = Util.IsValid,
+        ReclaimMenuInput = InputMode.Reclaim,
+        EnsureMenuVisible = function()
+            Session.EnsureVisible(S)
+        end,
     }
-end
-
-local function NormalizeDock(side)
-    local d = string.lower(tostring(side or "right"))
-    if d == "left" then
-        return "left"
-    end
-    return "right"
-end
-
-local function DockButtonCaption()
-    local side = config.dock == "left" and "Left" or "Right"
-    return "Dock: " .. side
-end
-
---- Percentage anchors for left or right dock. rightFrac is the edge margin for both sides.
-local function ApplyPercentLayout(slot)
-    if slot == nil then
-        return
-    end
-    local edge = config.rightFrac or 0.01
-    local width = config.widthFrac or 0.32
-    local topFrac = config.topFrac
-    local bottomFrac = 1.0 - config.bottomFrac
-    local minX
-    local maxX
-    if config.dock == "left" then
-        minX = edge
-        maxX = edge + width
-    else
-        minX = 1.0 - width - edge
-        maxX = 1.0 - edge
-    end
-
-    pcall(function()
-        slot:SetAutoSize(false)
-        slot:SetAnchors({
-            Minimum = { X = minX, Y = topFrac },
-            Maximum = { X = maxX, Y = bottomFrac },
-        })
-        slot:SetOffsets({ Left = 0, Top = 0, Right = 0, Bottom = 0 })
-        slot:SetAlignment({ X = 0.0, Y = 0.0 })
-    end)
-end
-
-local function SyncDockChrome()
-    for _, ctrl in ipairs(liveControls) do
-        if ctrl.kind == "dock" and ctrl.widget ~= nil then
-            -- Recreate Button content — SetText on Button children goes stale after a few flips.
-            local serial = Dropdown.nextRowSerial()
-            pcall(function()
-                local label = Construct(
-                    "/Script/UMG.TextBlock",
-                    ctrl.widget,
-                    "ModMenu_DockLbl_" .. tostring(serial)
-                )
-                StyleText(label, config.fontItem)
-                label:SetText(FText(DockButtonCaption()))
-                ctrl.widget:SetContent(label)
-                ctrl.label = label
-            end)
-        end
-    end
-end
-
-local function SetDockInternal(side)
-    config.dock = NormalizeDock(side)
-    ApplyPercentLayout(panelSlot)
-    SyncDockChrome()
-    Log("Dock -> " .. config.dock)
-end
-
-local function DestroyShell()
-    StopPoll()
-    local wasHoldingInput = menuOpen or openCountHeld
-    local remaining = NoteMenuClosed()
-    if IsValid(menuRoot) then
-        pcall(function()
-            menuRoot:RemoveFromParent()
-        end)
-        pcall(function()
-            menuRoot:RemoveFromViewport()
-        end)
-    end
-    menuRoot = nil
-    contentBox = nil
-    panelSlot = nil
-    liveControls = {}
-    menuOpen = false
-    -- ClientRestart always destroys the shell. Do not ApplyGameOnly / hide
-    -- the cursor unless this instance had actually taken input.
-    if wasHoldingInput then
-        SetMenuInputActive(false, remaining)
-    end
-end
-
-local function BuildContent()
-    if not IsValid(contentBox) then
-        return
-    end
-
-    pcall(function()
-        contentBox:ClearChildren()
-    end)
-    liveControls = {}
-
-    -- Must change every rebuild. Reusing FNames after ClearChildren resurrects zombies —
-    -- category (more option rows) breaks harder than language; both are the same control.
-    contentGen = contentGen + 1
-    local suffix = tostring(contentGen)
-
-    local title = Construct("/Script/UMG.TextBlock", contentBox, "ModMenu_Title_" .. suffix)
-    StyleText(title, config.fontTitle)
-    SetLabelText(title, config.title)
-    contentBox:AddChildToVerticalBox(title)
-
-    local keyName = tostring(config.keyHint or config.keyName or "F6")
-    local hintText = "[" .. keyName .. "] toggle menu"
-    if type(config.consoleCommand) == "string" and config.consoleCommand ~= "" then
-        hintText = hintText .. " · " .. config.consoleCommand
-    end
-    local hint = Construct("/Script/UMG.TextBlock", contentBox, "ModMenu_Hint_" .. suffix)
-    StyleText(hint, config.fontHint)
-    SetLabelText(hint, hintText)
-    contentBox:AddChildToVerticalBox(hint)
-
-    -- Shell chrome: flip Left/Right dock without rebuilding the panel.
-    local dockBtn, dockLbl = CreateTextButton(
-        contentBox,
-        "ModMenu_Dock_" .. suffix,
-        DockButtonCaption()
-    )
-    contentBox:AddChildToVerticalBox(dockBtn)
-    AddSpacer(contentBox, "ModMenu_DockPad_" .. suffix, 8)
-    table.insert(liveControls, {
-        kind = "dock",
-        widget = dockBtn,
-        label = dockLbl,
-    })
-
-    AddSpacer(contentBox, "ModMenu_HeadPad_" .. suffix, 16)
-
-    if #sections == 0 then
-        local empty = Construct("/Script/UMG.TextBlock", contentBox, "ModMenu_Empty_" .. suffix)
-        StyleText(empty, config.fontHint)
-        SetLabelText(empty, "No mods registered yet.")
-        contentBox:AddChildToVerticalBox(empty)
-        return
-    end
-
-    for sIndex, section in ipairs(sections) do
-        local secTitle = Construct(
-            "/Script/UMG.TextBlock",
-            contentBox,
-            string.format("ModMenu_Sec_%s_%s", section.id, suffix)
-        )
-        StyleText(secTitle, config.fontSection)
-        SetLabelText(secTitle, section.title or section.id)
-        contentBox:AddChildToVerticalBox(secTitle)
-        AddSpacer(contentBox, string.format("ModMenu_SecPad_%s_%s", section.id, suffix), 8)
-
-        local ctx = MakeWidgetCtx()
-        ctx.contentBox = contentBox
-
-        for i, item in ipairs(section.items) do
-            local namePrefix = string.format("ModMenu_%s_%s_%d_%s", section.id, tostring(item.id or item.type), i, suffix)
-            local widget = Widgets.get(item.type)
-            if not widget or not widget.build then
-                error("BuildContent: no builder for type " .. tostring(item.type))
-            end
-            ctx.section = section
-            ctx.item = item
-            ctx.namePrefix = namePrefix
-            widget.build(ctx)
-        end
-
-        if sIndex < #sections then
-            AddSpacer(contentBox, "ModMenu_Between_" .. section.id .. "_" .. suffix, 18)
-        end
-    end
-end
-
-local function CreateShell()
-    EnsureInstanceIdentity()
-    createAttempts = createAttempts + 1
-    local suffix = ShellNameSuffix()
-
-    local outer = UEHelpers.GetGameInstance()
-    if not IsValid(outer) then
-        outer = UEHelpers.GetPlayerController()
-    end
-    if not IsValid(outer) then
-        error("No GameInstance or PlayerController to parent the widget")
-    end
-
-    -- Names must be unique under GameInstance across ALL mods (ModRef-backed tag/serial).
-    local hud = Construct("/Script/UMG.UserWidget", outer, "ModMenu_Root_" .. suffix)
-    local tree = Construct("/Script/UMG.WidgetTree", hud, "ModMenu_Tree_" .. suffix)
-    hud.WidgetTree = tree
-
-    local canvas = Construct("/Script/UMG.CanvasPanel", tree, "ModMenu_Canvas_" .. suffix)
-    tree.RootWidget = canvas
-
-    local border = Construct("/Script/UMG.Border", canvas, "ModMenu_Border_" .. suffix)
-    pcall(function()
-        border:SetBrushColor({ R = 0.05, G = 0.07, B = 0.12, A = 0.92 })
-        border:SetPadding({ Left = 20, Top = 18, Right = 20, Bottom = 18 })
-    end)
-
-    -- ScrollBox fills the docked panel so long section lists are reachable.
-    local scroll = Construct("/Script/UMG.ScrollBox", border, "ModMenu_Scroll_" .. suffix)
-    pcall(function()
-        scroll:SetAnimateWheelScrolling(true)
-        scroll:SetAlwaysShowScrollbar(true)
-        scroll:SetAllowOverscroll(false)
-        if scroll.SetConsumeMouseWheel then
-            scroll:SetConsumeMouseWheel(1) -- EConsumeMouseWheel::Always
-        end
-        if scroll.SetScrollbarThickness then
-            scroll:SetScrollbarThickness({ X = 8, Y = 8 })
-        end
-    end)
-    border:SetContent(scroll)
-
-    local vbox = Construct("/Script/UMG.VerticalBox", scroll, "ModMenu_VBox_" .. suffix)
-    pcall(function()
-        scroll:AddChild(vbox)
-    end)
-
-    local slot = canvas:AddChildToCanvas(border)
-    panelSlot = slot
-    if slot then
-        ApplyPercentLayout(slot)
-    end
-
-    hud:AddToViewport(viewportZ)
-    hud:SetVisibility(VIS_COLLAPSED)
-
-    menuRoot = hud
-    contentBox = vbox
-    BuildContent()
-
-    Log(string.format(
-        "Shell ready name=ModMenu_Root_%s z=%d dock=%s (~%.0f%% x ~%.0f%%). Sections: %d",
-        suffix,
-        viewportZ,
-        tostring(config.dock),
-        config.widthFrac * 100,
-        (1.0 - config.topFrac - config.bottomFrac) * 100,
-        #sections
-    ))
-end
-
-local function EnsureShell()
-    if IsValid(menuRoot) and IsValid(contentBox) then
-        return true
-    end
-    local ok, err = pcall(CreateShell)
-    if not ok then
-        Log("CreateShell failed: " .. tostring(err))
-        DestroyShell()
-        return false
-    end
-    return IsValid(menuRoot)
-end
-
-local function PollControls()
-    local ctx = MakeWidgetCtx()
-
-    -- Continuous polls (search filter, checkbox state, UButton IsPressed).
-    for _, ctrl in ipairs(liveControls) do
-        if ctrl.kind == "dock" then
-            if Input.WidgetPressedEdge(ctrl, ctrl.widget) then
-                SetDockInternal(config.dock == "left" and "right" or "left")
-                ReclaimMenuInput()
-                Input.IgnoreClicks(2)
-            end
-        else
-            local widget = Widgets.get(ctrl.kind)
-            if widget and widget.poll then
-                widget.poll(ctrl, ctx)
-            end
-        end
-    end
-
-    local clicked = ConsumeMouseClick()
-    if not clicked then
-        return
-    end
-
-    -- Dropdown option rows take priority over headers (hit-test order).
-    for _, ctrl in ipairs(liveControls) do
-        if ctrl.kind == "dropdown" and Dropdown.pollOptionClick(ctrl, ctx) then
-            return
-        end
-    end
-
-    for _, ctrl in ipairs(liveControls) do
-        if ctrl.kind == "dropdown" and Dropdown.pollHeaderClick(ctrl, ctx) then
-            return
-        elseif ctrl.kind == "dock" and WidgetHovered(ctrl.widget) then
-            SetDockInternal(config.dock == "left" and "right" or "left")
-            ReclaimMenuInput()
-            return
-        elseif ctrl.kind == "button" then
-            local widget = Widgets.get("button")
-            if widget and widget.pollClick and widget.pollClick(ctrl, ctx) then
-                return
-            end
-        end
-    end
-end
-
-local function StartPoll()
-    StopPoll()
-    pollHandle = LoopInGameThreadWithDelay(POLL_MS, function()
-        if not menuOpen then
-            return
-        end
-        -- Reclaim when the game steals cursor / click routing (toast, etc.).
-        -- Look-ignore is opt-in (Init ignoreLook) — do not re-lock the camera by default.
-        local pc = UEHelpers.GetPlayerController()
-        if IsValid(pc) then
-            local lookOk = true
-            if config.ignoreLook == true then
-                pcall(function()
-                    lookOk = pc:IsLookInputIgnored() == true
-                end)
-            end
-            if not pc.bShowMouseCursor
-                or not pc.bEnableClickEvents
-                or not pc.bEnableMouseOverEvents
-                or not lookOk
-            then
-                ReclaimMenuInput()
-            end
-        end
-        PollControls()
-    end)
-end
-
---- Host gate for opening (key toggle + ModMenu.Open). Close is never gated.
----@return boolean allowed
----@return string|nil reason
-local function EvaluateCanOpen()
-    local fn = config.canOpen
-    if type(fn) ~= "function" then
-        return true
-    end
-    local ok, a, b = pcall(fn)
-    if not ok then
-        return false, tostring(a)
-    end
-    if a == false then
-        return false, (type(b) == "string" and b ~= "") and b or "canOpen returned false"
-    end
-    return true
-end
-
----@param opts { skipCanOpen?: boolean }|nil
-local function OpenInternal(opts)
-    opts = opts or {}
-    if not opts.skipCanOpen then
-        local allowed, reason = EvaluateCanOpen()
-        if not allowed then
-            Log("OPEN blocked: " .. tostring(reason))
-            return
-        end
-    end
-    if not EnsureShell() then
-        return
-    end
-    BuildContent()
-    menuRoot:SetVisibility(VIS_VISIBLE)
-    menuOpen = true
-    NoteMenuOpened()
-    SetMenuInputActive(true)
-    StartPoll()
-    Log(string.format("OPEN tag=%s", tostring(instanceTag)))
-    for _, fn in ipairs(onOpenCallbacks) do
-        SafeCall(fn)
-    end
-end
-
-local function CloseInternal()
-    StopPoll()
-    Input.ClearClickState()
-    Dropdown.collapseAll(liveControls, nil)
-    if IsValid(menuRoot) then
-        menuRoot:SetVisibility(VIS_COLLAPSED)
-    end
-    menuOpen = false
-    local remaining = NoteMenuClosed()
-    SetMenuInputActive(false, remaining)
-    Log(string.format("CLOSED tag=%s openRemaining=%s", tostring(instanceTag), tostring(remaining)))
-end
-
-local function ToggleInternal()
-    -- Close is never gated. Open (and recover-to-open) respects canOpen.
-    if menuOpen and IsValid(menuRoot) and IsMenuVisible() then
-        CloseInternal()
-    else
-        OpenInternal()
-    end
-end
-
-local function InstallHooks()
-    if hooksInstalled then
-        return
-    end
-    hooksInstalled = true
-
-    RegisterHook("/Script/Engine.PlayerController:ClientRestart", function()
-        ExecuteInGameThread(function()
-            local wasOpen = menuOpen
-            DestroyShell()
-            Log("ClientRestart — shell reset")
-            if wasOpen then
-                -- Already-open session: restore without re-checking the host gate.
-                OpenInternal({ skipCanOpen = true })
-            end
-        end)
-    end)
-end
-
---- Advertise our toggle key via ModRef so two mods on the same key log a clear clash.
---- Does not block binding — authors/players decide whether to change keys.
-local function ClaimToggleKey(keyHint)
-    EnsureInstanceIdentity()
-    local hint = tostring(keyHint or "unknown")
-    local claimKey = SHARED_KEY_CLAIM_PREFIX .. hint
-    local owner = SharedGet(claimKey)
-    local me = tostring(instanceTag)
-
-    if type(owner) == "string" and owner ~= "" and owner ~= me then
-        -- Single Log() line (Util.Log already prefixes [ModMenu]).
-        Log(string.format(
-            "KEY CONFLICT: %s already claimed by %q — this menu (%q) shares that bind. "
-                .. "Both may toggle together (ok for same-author dual docks); "
-                .. "unrelated mods should use different keys.",
-            hint,
-            owner,
-            me
-        ))
-    elseif type(owner) == "string" and owner == me then
-        Log(string.format("Key %s already claimed by this instance (%q)", hint, me))
-    else
-        Log(string.format("Key %s claimed by %q", hint, me))
-    end
-
-    -- Last Init wins the registry slot (still useful: next mod sees the latest owner).
-    SharedSet(claimKey, me)
-end
-
-local function NormalizeInputBackend(value)
-    if value == nil then
-        return "ue4ss"
-    end
-    if value == "ue4ss" or value == "engine" then
-        return value
-    end
-    error('ModMenu.Init: inputBackend must be "ue4ss" or "engine"')
-end
-
-local function ResolveEngineKeyName()
-    if type(config.keyName) == "string" and config.keyName ~= "" then
-        return config.keyName
-    end
-    local hint = tostring(config.keyHint or "")
-    if hint:match("^[%w]+$") then
-        return hint
-    end
-    return nil
 end
 
 local function InstallInput()
@@ -963,23 +105,29 @@ local function InstallInput()
     if config.keyHint == nil and key == Key.F6 then
         config.keyHint = "F6"
     end
-    config.keyName = ResolveEngineKeyName() or config.keyName
+    config.keyName = Config.ResolveEngineKeyName(config) or config.keyName
     if config.inputBackend == "engine" and (type(config.keyName) ~= "string" or config.keyName == "") then
         error('ModMenu.Init: keyName is required when inputBackend is "engine" (Unreal FKey name, e.g. "F7")')
     end
     if config.inputBackend ~= "engine" and (type(config.keyName) ~= "string" or config.keyName == "") then
         config.keyName = tostring(config.keyHint or "F6")
     end
-    ClaimToggleKey(config.keyHint or tostring(key))
+    Instance.ClaimToggleKey(config, config.keyHint or tostring(key))
     Input.Install({
         backend = config.inputBackend,
         key = key,
         keyName = config.keyName,
-        onToggle = ToggleInternal,
-        onOpen = OpenInternal,
-        onClose = CloseInternal,
+        onToggle = function()
+            Lifecycle.Toggle(S)
+        end,
+        onOpen = function()
+            Lifecycle.Open(S)
+        end,
+        onClose = function()
+            Lifecycle.Close(S)
+        end,
         isMenuOpen = function()
-            return menuOpen == true
+            return S.menuOpen == true
         end,
         consoleCommand = config.consoleCommand,
     })
@@ -988,93 +136,42 @@ end
 --- Initialize / configure this mod's shell. Safe to call multiple times.
 ---@param opts table|nil
 function ModMenu.Init(opts)
-    opts = opts or {}
-    if opts.title ~= nil then config.title = opts.title end
-    if opts.key ~= nil then config.key = opts.key end
-    if opts.keyHint ~= nil then config.keyHint = opts.keyHint end
-    if opts.widthFrac ~= nil then config.widthFrac = opts.widthFrac end
-    if opts.topFrac ~= nil then config.topFrac = opts.topFrac end
-    if opts.bottomFrac ~= nil then config.bottomFrac = opts.bottomFrac end
-    if opts.rightFrac ~= nil then config.rightFrac = opts.rightFrac end
-    if opts.dock ~= nil then config.dock = NormalizeDock(opts.dock) end
-    if opts.fontTitle ~= nil then config.fontTitle = opts.fontTitle end
-    if opts.fontHint ~= nil then config.fontHint = opts.fontHint end
-    if opts.fontItem ~= nil then config.fontItem = opts.fontItem end
-    if opts.fontSection ~= nil then config.fontSection = opts.fontSection end
-    if opts.fontDropdown ~= nil then config.fontDropdown = opts.fontDropdown end
-    if opts.canOpen ~= nil then
-        if opts.canOpen ~= false and type(opts.canOpen) ~= "function" then
-            error("ModMenu.Init: canOpen must be a function or false/nil")
-        end
-        config.canOpen = (type(opts.canOpen) == "function") and opts.canOpen or nil
-    end
-    if opts.ignoreLook ~= nil then
-        config.ignoreLook = opts.ignoreLook == true
-    end
-    if opts.inputBackend ~= nil then
-        config.inputBackend = NormalizeInputBackend(opts.inputBackend)
-    end
-    if opts.keyName ~= nil then
-        if type(opts.keyName) ~= "string" or opts.keyName == "" then
-            error("ModMenu.Init: keyName must be a non-empty string")
-        end
-        config.keyName = opts.keyName
-    end
-    if opts.consoleCommand ~= nil then
-        if opts.consoleCommand == false or opts.consoleCommand == "" then
-            config.consoleCommand = nil
-        elseif type(opts.consoleCommand) ~= "string" then
-            error("ModMenu.Init: consoleCommand must be a string or false")
-        else
-            config.consoleCommand = opts.consoleCommand
-        end
-    end
-    -- Human-readable FName tag (Live View). Locked after first EnsureInstanceIdentity.
-    if opts.instanceId ~= nil and instanceTag == nil then
-        config.instanceId = opts.instanceId
-    end
-
-    if config.key == nil then
-        config.key = Key.F6
-        config.keyHint = config.keyHint or "F6"
-    end
-    config.inputBackend = NormalizeInputBackend(config.inputBackend)
-
-    EnsureInstanceIdentity()
+    Config.ApplyInit(config, opts, { instanceUnlocked = Instance.GetTag() == nil })
+    Instance.Ensure(config)
     Umg.SetDefaults({ fontItem = config.fontItem })
-    InstallHooks()
+    Lifecycle.InstallHooks(S)
     InstallInput()
     initialized = true
     -- Re-apply dock if shell already exists (Init can be called again).
-    ApplyPercentLayout(panelSlot)
-    SyncDockChrome()
+    Dock.ApplyPercentLayout(S.panelSlot, S.config)
+    Dock.SyncChrome(S)
     Log(string.format(
         "Init — title=%q key=%s backend=%s dock=%s instance=%q serial=%s z=%d",
         tostring(config.title),
         tostring(config.keyHint or config.key),
         tostring(config.inputBackend),
         tostring(config.dock),
-        tostring(instanceTag),
-        tostring(instanceSerial),
-        viewportZ
+        tostring(Instance.GetTag()),
+        tostring(Instance.GetSerial()),
+        Instance.GetViewportZ()
     ))
 end
 
 --- Process-wide instance tag used in UObject names (e.g. ModMenu_Root_TestMod_1).
 ---@return string|nil
 function ModMenu.GetInstanceId()
-    return instanceTag
+    return Instance.GetTag()
 end
 
 ---@return integer|nil
 function ModMenu.GetInstanceSerial()
-    return instanceSerial
+    return Instance.GetSerial()
 end
 
 --- Pin the panel to the left or right edge (session only; no free drag).
 ---@param side string "left"|"right"
 function ModMenu.SetDock(side)
-    SetDockInternal(side)
+    Dock.Set(S, side)
 end
 
 ---@return string
@@ -1088,54 +185,14 @@ function ModMenu.Register(section)
     if not initialized then
         ModMenu.Init({})
     end
-    ValidateSection(section)
-
-    local copy = {
-        id = section.id,
-        title = section.title or section.id,
-        items = section.items,
-    }
-
-    -- Seed defaults into values store.
-    for _, item in ipairs(copy.items) do
-        local widget = Widgets.get(item.type)
-        if widget and widget.seed then
-            widget.seed(copy.id, item, values)
-        end
-    end
-
-    local existing = sectionIndexById[copy.id]
-    if existing then
-        sections[existing] = copy
-        Log("Updated section: " .. copy.id)
-    else
-        table.insert(sections, copy)
-        sectionIndexById[copy.id] = #sections
-        Log("Registered section: " .. copy.id .. " (" .. tostring(#copy.items) .. " items)")
-    end
-
-    if menuOpen then
-        ExecuteInGameThread(function()
-            local ok, err = pcall(function()
-                if EnsureShell() then
-                    BuildContent()
-                    EnsureMenuVisible()
-                    Input.ClearClickState()
-                end
-            end)
-            if not ok then
-                Log("Register rebuild failed: " .. tostring(err))
-                EnsureMenuVisible()
-            end
-        end)
-    end
+    Registry.Register(S, section)
 end
 
 ---@param sectionId string
 ---@param itemId string
 ---@return any
 function ModMenu.Get(sectionId, itemId)
-    return values[ValueKey(sectionId, itemId)]
+    return Registry.Get(S, sectionId, itemId)
 end
 
 --- Update a label item's text (by id) in the section + live widget if present.
@@ -1144,27 +201,7 @@ end
 ---@param text string
 ---@return boolean
 function ModMenu.SetLabel(sectionId, itemId, text)
-    local idx = sectionIndexById[sectionId]
-    if not idx then
-        return false
-    end
-    local section = sections[idx]
-    local item = FindItemById(section.items, itemId, "label")
-    if not item then
-        return false
-    end
-    item.label = tostring(text)
-    local vkey = ValueKey(sectionId, itemId)
-    local ctx = MakeWidgetCtx()
-    local labelWidget = Widgets.get("label")
-    for _, ctrl in ipairs(liveControls) do
-        if ctrl.kind == "label" and ctrl.valueKey == vkey and IsValid(ctrl.widget) then
-            if labelWidget and labelWidget.apply then
-                labelWidget.apply(ctrl, item.label, ctx)
-            end
-        end
-    end
-    return true
+    return Registry.SetLabel(S, sectionId, itemId, text)
 end
 
 --- Update a button's caption (section item + live TextBlock if present).
@@ -1173,28 +210,7 @@ end
 ---@param text string
 ---@return boolean
 function ModMenu.SetButtonLabel(sectionId, itemId, text)
-    local idx = sectionIndexById[sectionId]
-    if not idx then
-        return false
-    end
-    local section = sections[idx]
-    local item = FindItemById(section.items, itemId, "button")
-    if not item then
-        return false
-    end
-    item.label = tostring(text)
-    for _, ctrl in ipairs(liveControls) do
-        if ctrl.kind == "button"
-            and ctrl.sectionId == sectionId
-            and ctrl.item
-            and ctrl.item.id == itemId
-        then
-            -- Do not gate on IsValid(labelWidget) — Button child TextBlocks often report invalid.
-            SetLabelText(ctrl.labelWidget, item.label)
-            return true
-        end
-    end
-    return true
+    return Registry.SetButtonLabel(S, sectionId, itemId, text)
 end
 
 --- Enable/disable a button (blocks poll clicks + UMG SetIsEnabled when live).
@@ -1203,33 +219,7 @@ end
 ---@param enabled boolean
 ---@return boolean
 function ModMenu.SetButtonEnabled(sectionId, itemId, enabled)
-    local idx = sectionIndexById[sectionId]
-    if not idx then
-        return false
-    end
-    local section = sections[idx]
-    local item = FindItemById(section.items, itemId, "button")
-    if not item then
-        return false
-    end
-    local on = enabled and true or false
-    item.enabled = on
-    for _, ctrl in ipairs(liveControls) do
-        if ctrl.kind == "button"
-            and ctrl.sectionId == sectionId
-            and ctrl.item
-            and ctrl.item.id == itemId
-        then
-            ctrl.enabled = on
-            if IsValid(ctrl.widget) then
-                pcall(function()
-                    ctrl.widget:SetIsEnabled(on)
-                end)
-            end
-            return true
-        end
-    end
-    return true
+    return Registry.SetButtonEnabled(S, sectionId, itemId, enabled)
 end
 
 --- Set a value and sync a live checkbox/dropdown/number/textinput if present.
@@ -1237,17 +227,7 @@ end
 ---@param itemId string
 ---@param value any
 function ModMenu.Set(sectionId, itemId, value)
-    local vkey = ValueKey(sectionId, itemId)
-    values[vkey] = value
-    local ctx = MakeWidgetCtx()
-    for _, ctrl in ipairs(liveControls) do
-        if ctrl.valueKey == vkey then
-            local widget = Widgets.get(ctrl.kind)
-            if widget and widget.apply then
-                widget.apply(ctrl, value, ctx)
-            end
-        end
-    end
+    Registry.Set(S, sectionId, itemId, value)
 end
 
 --- Replace dropdown options.
@@ -1258,74 +238,7 @@ end
 ---@param selectedValue any|nil pass false to clear selection
 ---@return boolean
 function ModMenu.SetOptions(sectionId, itemId, options, selectedValue)
-    local idx = sectionIndexById[sectionId]
-    if not idx then
-        return false
-    end
-    local section = sections[idx]
-    for _, item in ipairs(section.items) do
-        if item.id == itemId and item.type == "dropdown" then
-            if type(options) ~= "table" or #options == 0 then
-                error("SetOptions requires non-empty options array")
-            end
-            local list = NormalizeOptions(options)
-            item.options = list
-            local vkey = ValueKey(sectionId, itemId)
-            if selectedValue == false then
-                values[vkey] = nil
-                item.default = nil
-            elseif selectedValue ~= nil then
-                local plain = ToPlainString(selectedValue) or selectedValue
-                values[vkey] = plain
-                item.default = plain
-            end
-
-            -- Prefer in-place refresh for searchable lists (category filter, etc.).
-            local live = nil
-            for _, ctrl in ipairs(liveControls) do
-                if ctrl.kind == "dropdown" and ctrl.valueKey == vkey then
-                    live = ctrl
-                    break
-                end
-            end
-
-            if menuOpen and live and live.searchable and live.listBox ~= nil then
-                Dropdown.refreshLive(live, list, selectedValue, values, vkey)
-                Log(string.format(
-                    "SetOptions(%s.%s) refreshed searchable list (%d options)",
-                    tostring(sectionId),
-                    tostring(itemId),
-                    #list
-                ))
-                return true
-            end
-
-            if menuOpen then
-                ExecuteInGameThread(function()
-                    local ok, err = pcall(function()
-                        if EnsureShell() then
-                            BuildContent()
-                            EnsureMenuVisible()
-                            Input.ClearClickState()
-                        end
-                    end)
-                    if not ok then
-                        Log("SetOptions rebuild failed: " .. tostring(err))
-                        EnsureMenuVisible()
-                    else
-                        Log(string.format(
-                            "SetOptions(%s.%s) rebuilt UI with %d options",
-                            tostring(sectionId),
-                            tostring(itemId),
-                            #list
-                        ))
-                    end
-                end)
-            end
-            return true
-        end
-    end
-    return false
+    return Registry.SetOptions(S, sectionId, itemId, options, selectedValue)
 end
 
 --- Register a callback invoked each time the menu opens (after shell is visible).
@@ -1341,32 +254,34 @@ function ModMenu.Open()
     if not initialized then
         ModMenu.Init({})
     end
-    ExecuteInGameThread(OpenInternal)
+    ExecuteInGameThread(function()
+        Lifecycle.Open(S)
+    end)
 end
 
 function ModMenu.Close()
-    ExecuteInGameThread(CloseInternal)
+    ExecuteInGameThread(function()
+        Lifecycle.Close(S)
+    end)
 end
 
 function ModMenu.Toggle()
     if not initialized then
         ModMenu.Init({})
     end
-    ExecuteInGameThread(ToggleInternal)
+    ExecuteInGameThread(function()
+        Lifecycle.Toggle(S)
+    end)
 end
 
 function ModMenu.IsOpen()
-    return menuOpen == true
+    return S.menuOpen == true
 end
 
 --- List registered section ids (debug / tooling).
 ---@return string[]
 function ModMenu.ListSections()
-    local ids = {}
-    for _, section in ipairs(sections) do
-        table.insert(ids, section.id)
-    end
-    return ids
+    return Registry.ListSections(S)
 end
 
 return ModMenu

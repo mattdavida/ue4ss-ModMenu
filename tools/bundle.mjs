@@ -18,23 +18,6 @@ const ROOT = path.resolve(__dirname, "..");
 const OUT = path.join(ROOT, "dist", "ModMenu.bundle.lua");
 const ENTRY = "ModMenu.lua";
 
-/** @type {[string, string][]} moduleName → relative path (deps only; entry is free chunk) */
-const MODULES = [
-  ["ModMenu.core.util", "core/util.lua"],
-  ["ModMenu.core.umg", "core/umg.lua"],
-  ["ModMenu.core.input", "core/input.lua"],
-  ["ModMenu.core.options", "core/options.lua"],
-  ["ModMenu.widgets.separator", "widgets/separator.lua"],
-  ["ModMenu.widgets.label", "widgets/label.lua"],
-  ["ModMenu.widgets.button", "widgets/button.lua"],
-  ["ModMenu.widgets.checkbox", "widgets/checkbox.lua"],
-  ["ModMenu.widgets.dropdown", "widgets/dropdown.lua"],
-  ["ModMenu.widgets.number", "widgets/number.lua"],
-  ["ModMenu.widgets.textinput", "widgets/textinput.lua"],
-  ["ModMenu.widgets.row", "widgets/row.lua"],
-  ["ModMenu.widgets.init", "widgets/init.lua"],
-];
-
 const EXTERNAL_OK = new Set(["UEHelpers.UEHelpers"]);
 const REQUIRE_RE = /require\s*\(\s*["']([^"']+)["']\s*\)/g;
 
@@ -56,6 +39,54 @@ function collectRequires(source) {
   }
   return names;
 }
+
+/** widgets/*.lua — type files A–Z, widgets/init.lua last. */
+function discoverWidgetModules() {
+  const widgetsDir = path.join(ROOT, "widgets");
+  const files = fs
+    .readdirSync(widgetsDir, { withFileTypes: true })
+    .filter((ent) => ent.isFile() && ent.name.endsWith(".lua"))
+    .map((ent) => ent.name);
+
+  const typeFiles = files.filter((name) => name !== "init.lua").sort();
+  const ordered = [...typeFiles];
+  if (files.includes("init.lua")) {
+    ordered.push("init.lua");
+  }
+
+  if (files.includes("init.lua")) {
+    const initRequires = collectRequires(readLua("widgets/init.lua"));
+    for (const file of typeFiles) {
+      const modName = `ModMenu.widgets.${path.basename(file, ".lua")}`;
+      if (!initRequires.has(modName)) {
+        console.warn(`widgets/${file} is not required by widgets/init.lua`);
+      }
+    }
+  }
+
+  return ordered.map((file) => [
+    `ModMenu.widgets.${path.basename(file, ".lua")}`,
+    `widgets/${file}`,
+  ]);
+}
+
+/** @type {[string, string][]} moduleName → relative path (deps only; entry is free chunk) */
+const MODULES = [
+  ["ModMenu.core.util", "core/util.lua"],
+  ["ModMenu.core.umg", "core/umg.lua"],
+  ["ModMenu.core.shared", "core/shared.lua"],
+  ["ModMenu.core.config", "core/config.lua"],
+  ["ModMenu.core.instance", "core/instance.lua"],
+  ["ModMenu.core.inputmode", "core/inputmode.lua"],
+  ["ModMenu.core.input", "core/input.lua"],
+  ["ModMenu.core.options", "core/options.lua"],
+  ...discoverWidgetModules(),
+  ["ModMenu.shell.session", "shell/session.lua"],
+  ["ModMenu.shell.dock", "shell/dock.lua"],
+  ["ModMenu.shell.build", "shell/build.lua"],
+  ["ModMenu.shell.lifecycle", "shell/lifecycle.lua"],
+  ["ModMenu.shell.registry", "shell/registry.lua"],
+];
 
 function luaString(s) {
   return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
