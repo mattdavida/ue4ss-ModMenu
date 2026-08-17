@@ -67,11 +67,11 @@ Reference feel: Silksong-style cheats UI — tabs, collapsible groups, checkbox 
 
 Goal: make the north star easy to work toward without re-discovering constraints.
 
-Architecture extract is done — see `plan.md`. Vision features (themes, collapse, tabs) can start.
+Source layout and install paths are documented in README. Vision features (themes, collapse, tabs) can start.
 
 - [ ] Keep this file updated as phases complete
 - [x] README: short “Theming & polish” stub linking here
-- [x] Architecture pointer (`plan.md`) in README + this file
+- [x] README: source layout + install documented
 - [x] README: known limits (custom game cursors; host must show glyph if engine cursor is suppressed)
 - [ ] Maintain at least one simple host smoke section (DevTools-style) for visual checks on UE5 + one UE4 title when available
 

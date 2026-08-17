@@ -65,7 +65,7 @@ tools/
 
 `widgets/*.lua` are auto-bundled. New `core/` or `shell/` files still need a `MODULES` row in `tools/bundle.mjs`.
 
-Architecture: see `plan.md`. UX / theming: see `vision.md`.
+UX / theming: see `vision.md`.
 
 ---
 
@@ -570,7 +570,7 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 
 ## Theming & polish
 
-Visual tokens, collapse, and tabs are planned in `vision.md`. Structure / extract map is in `plan.md`. Hosts keep the same `Init` / `Register` API while those land.
+Visual tokens, collapse, and tabs are planned in `vision.md`. Hosts keep the same `Init` / `Register` API while those land.
 
 ---
 
@@ -613,7 +613,6 @@ Ship `MyCheatMenu/` plus ModMenu from `npm run deploy` (`dist/ModMenu.zip` → e
 ## See also
 
 - Install / Nexus zip: `npm run deploy` → `dist/ModMenu.zip`
-- Architecture: `plan.md`
 - UX / theming: `vision.md`
 - Widget registry: `widgets/init.lua`
 - Public API facade: `ModMenu.lua`
