@@ -9,6 +9,7 @@ local Options = require("ModMenu.core.options")
 local Widgets = require("ModMenu.widgets.init")
 local Session = require("ModMenu.shell.session")
 local Build = require("ModMenu.shell.build")
+local Collapse = require("ModMenu.shell.collapse")
 
 local Log = Util.Log
 local IsValid = Util.IsValid
@@ -35,17 +36,16 @@ local function ValidateItem(item, sectionId, index)
     end
 end
 
---- Walk top-level + row.children items (depth 1 nesting).
+--- Walk top-level, fold, and row children (fold may contain a row).
 local function FindItemById(items, itemId, typeName)
     for _, item in ipairs(items or {}) do
         if item.id == itemId and (typeName == nil or item.type == typeName) then
             return item
         end
-        if item.type == "row" and type(item.items) == "table" then
-            for _, child in ipairs(item.items) do
-                if child.id == itemId and (typeName == nil or child.type == typeName) then
-                    return child
-                end
+        if (item.type == "row" or item.type == "fold") and type(item.items) == "table" then
+            local found = FindItemById(item.items, itemId, typeName)
+            if found then
+                return found
             end
         end
     end
@@ -62,13 +62,19 @@ local function ValidateSection(section)
     if type(section.items) ~= "table" then
         error("Register(" .. tostring(section.id) .. ") requires .items array")
     end
+    Collapse.Validate(section)
     for i, item in ipairs(section.items) do
         ValidateItem(item, section.id, i)
     end
 end
 
+--- Rebuild now if open; otherwise mark dirty so the next Open rebuilds
+--- (close/open keeps the UMG tree).
 local function RebuildIfOpen(S)
     if not S.menuOpen then
+        if IsValid(S.menuRoot) then
+            S.contentDirty = true
+        end
         return
     end
     ExecuteInGameThread(function()
@@ -106,7 +112,12 @@ function M.Register(S, section)
         id = section.id,
         title = section.title or section.id,
         items = section.items,
+        collapsible = section.collapsible == true,
+        collapsed = section.collapsed == true,
+        onToggle = section.onToggle,
     }
+
+    Collapse.Seed(S, copy)
 
     -- Seed defaults into values store.
     for _, item in ipairs(copy.items) do
@@ -226,69 +237,71 @@ function M.SetOptions(S, sectionId, itemId, options, selectedValue)
         return false
     end
     local section = S.sections[idx]
-    for _, item in ipairs(section.items) do
-        if item.id == itemId and item.type == "dropdown" then
-            if type(options) ~= "table" or #options == 0 then
-                error("SetOptions requires non-empty options array")
-            end
-            local list = NormalizeOptions(options)
-            item.options = list
-            local vkey = ValueKey(sectionId, itemId)
-            if selectedValue == false then
-                S.values[vkey] = nil
-                item.default = nil
-            elseif selectedValue ~= nil then
-                local plain = ToPlainString(selectedValue) or selectedValue
-                S.values[vkey] = plain
-                item.default = plain
-            end
+    local item = FindItemById(section.items, itemId, "dropdown")
+    if not item then
+        return false
+    end
+    if type(options) ~= "table" or #options == 0 then
+        error("SetOptions requires non-empty options array")
+    end
+    local list = NormalizeOptions(options)
+    item.options = list
+    local vkey = ValueKey(sectionId, itemId)
+    if selectedValue == false then
+        S.values[vkey] = nil
+        item.default = nil
+    elseif selectedValue ~= nil then
+        local plain = ToPlainString(selectedValue) or selectedValue
+        S.values[vkey] = plain
+        item.default = plain
+    end
 
-            -- Prefer in-place refresh for searchable lists (category filter, etc.).
-            local live = nil
-            for _, ctrl in ipairs(S.liveControls) do
-                if ctrl.kind == "dropdown" and ctrl.valueKey == vkey then
-                    live = ctrl
-                    break
+    -- Prefer in-place refresh for searchable lists (category filter, etc.).
+    -- Live pickers still exist while the menu is closed (tree is kept).
+    local live = nil
+    for _, ctrl in ipairs(S.liveControls) do
+        if ctrl.kind == "dropdown" and ctrl.valueKey == vkey then
+            live = ctrl
+            break
+        end
+    end
+
+    if live and live.searchable and live.listBox ~= nil then
+        Dropdown.refreshLive(live, list, selectedValue, S.values, vkey)
+        Log(string.format(
+            "SetOptions(%s.%s) refreshed searchable list (%d options)",
+            tostring(sectionId),
+            tostring(itemId),
+            #list
+        ))
+        return true
+    end
+
+    if S.menuOpen then
+        ExecuteInGameThread(function()
+            local ok, err = pcall(function()
+                if Build.Ensure(S) then
+                    Build.BuildContent(S)
+                    Session.EnsureVisible(S)
+                    Input.ClearClickState()
                 end
-            end
-
-            if S.menuOpen and live and live.searchable and live.listBox ~= nil then
-                Dropdown.refreshLive(live, list, selectedValue, S.values, vkey)
+            end)
+            if not ok then
+                Log("SetOptions rebuild failed: " .. tostring(err))
+                Session.EnsureVisible(S)
+            else
                 Log(string.format(
-                    "SetOptions(%s.%s) refreshed searchable list (%d options)",
+                    "SetOptions(%s.%s) rebuilt UI with %d options",
                     tostring(sectionId),
                     tostring(itemId),
                     #list
                 ))
-                return true
             end
-
-            if S.menuOpen then
-                ExecuteInGameThread(function()
-                    local ok, err = pcall(function()
-                        if Build.Ensure(S) then
-                            Build.BuildContent(S)
-                            Session.EnsureVisible(S)
-                            Input.ClearClickState()
-                        end
-                    end)
-                    if not ok then
-                        Log("SetOptions rebuild failed: " .. tostring(err))
-                        Session.EnsureVisible(S)
-                    else
-                        Log(string.format(
-                            "SetOptions(%s.%s) rebuilt UI with %d options",
-                            tostring(sectionId),
-                            tostring(itemId),
-                            #list
-                        ))
-                    end
-                end)
-            end
-            return true
-        end
+        end)
+    elseif IsValid(S.menuRoot) then
+        S.contentDirty = true
     end
-    return false
+    return true
 end
 
 function M.ListSections(S)

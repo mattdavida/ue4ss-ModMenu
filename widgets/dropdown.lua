@@ -105,13 +105,15 @@ local function SetExpanded(ctrl, expanded)
             ctrl.optionsBox:SetVisibility(ctrl.expanded and VIS_VISIBLE or VIS_COLLAPSED)
         end
     end)
-    if ctrl.expanded and ctrl.searchable then
-        ctrl.searchFilter = ""
-        pcall(function()
-            if ctrl.searchBox ~= nil then
-                ctrl.searchBox:SetText(FText(""))
-            end
-        end)
+    if ctrl.expanded then
+        if ctrl.searchable then
+            ctrl.searchFilter = ""
+            pcall(function()
+                if ctrl.searchBox ~= nil then
+                    ctrl.searchBox:SetText(FText(""))
+                end
+            end)
+        end
         RebuildRows(ctrl)
     end
     SyncHeader(ctrl)
@@ -274,7 +276,7 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
         headerWasPressed = false,
     }
 
-    RebuildRows(picker)
+    -- Option buttons spawn on first expand, not at menu build.
     return root, picker
 end
 
@@ -391,6 +393,9 @@ local function ToggleHeader(ctrl, ctx)
         Dropdown.collapseAll(ctx.liveControls, ctrl)
     end
     SetExpanded(ctrl, nextExpanded)
+    if nextExpanded then
+        ctx.SafeCall(ctrl.item.onExpand, ctrl.list)
+    end
     Input.SuppressPressEdge(ctrl, "headerWasPressed")
     Input.IgnoreClicks(2)
     return true
@@ -487,7 +492,9 @@ function Dropdown.refreshLive(ctrl, list, selectedValue, values, vkey)
             ctrl.searchBox:SetText(FText(""))
         end
     end)
-    RebuildRows(ctrl)
+    if ctrl.expanded then
+        RebuildRows(ctrl)
+    end
     SyncHeader(ctrl)
 end
 

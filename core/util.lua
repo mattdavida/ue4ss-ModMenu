@@ -6,6 +6,18 @@ local M = {}
 
 local LIB_NAME = "ModMenu"
 
+-- UE4SS LoopInGameThreadWithDelay / ExecuteInGameThreadWithDelay store a
+-- registry ref. If Lua GC collects the closure, EngineTick throws
+-- "Ref was not function" and removes the whole Lua tick hook.
+local pinnedFns = {}
+
+function M.PinFn(fn)
+    if type(fn) == "function" then
+        pinnedFns[fn] = true
+    end
+    return fn
+end
+
 function M.Log(msg)
     print(string.format("[%s] %s\n", LIB_NAME, tostring(msg)))
 end

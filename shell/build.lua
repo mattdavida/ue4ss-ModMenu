@@ -10,6 +10,7 @@ local InputMode = require("ModMenu.core.inputmode")
 local Widgets = require("ModMenu.widgets.init")
 local Session = require("ModMenu.shell.session")
 local Dock = require("ModMenu.shell.dock")
+local Collapse = require("ModMenu.shell.collapse")
 
 local Log = Util.Log
 local IsValid = Util.IsValid
@@ -25,6 +26,7 @@ function M.BuildContent(S)
     if not IsValid(S.contentBox) then
         return
     end
+    S.contentDirty = false
 
     pcall(function()
         S.contentBox:ClearChildren()
@@ -78,18 +80,34 @@ function M.BuildContent(S)
     end
 
     for sIndex, section in ipairs(S.sections) do
-        local secTitle = Construct(
-            "/Script/UMG.TextBlock",
-            contentBox,
-            string.format("ModMenu_Sec_%s_%s", section.id, suffix)
-        )
-        StyleText(secTitle, config.fontSection)
-        SetLabelText(secTitle, section.title or section.id)
-        contentBox:AddChildToVerticalBox(secTitle)
-        AddSpacer(contentBox, string.format("ModMenu_SecPad_%s_%s", section.id, suffix), 8)
+        local collapsed = Collapse.IsCollapsed(S, section)
+        local itemParent = contentBox
+        if Collapse.IsCollapsible(section) then
+            local header = Collapse.BuildHeader(S, section, contentBox, suffix)
+            local body = Construct(
+                "/Script/UMG.VerticalBox",
+                contentBox,
+                string.format("ModMenu_SecBody_%s_%s", section.id, suffix)
+            )
+            contentBox:AddChildToVerticalBox(body)
+            Collapse.AttachBody(header, body, collapsed)
+            itemParent = body
+        else
+            local secTitle = Construct(
+                "/Script/UMG.TextBlock",
+                contentBox,
+                string.format("ModMenu_Sec_%s_%s", section.id, suffix)
+            )
+            StyleText(secTitle, config.fontSection)
+            SetLabelText(secTitle, section.title or section.id)
+            contentBox:AddChildToVerticalBox(secTitle)
+        end
+        AddSpacer(itemParent, string.format("ModMenu_SecPad_%s_%s", section.id, suffix), 8)
 
+        -- Always build children. Collapsed sections hide the body (dropdown-style)
+        -- so toggling does not rebuild and flicker under a still-down click.
         local ctx = S.makeWidgetCtx()
-        ctx.contentBox = contentBox
+        ctx.contentBox = itemParent
 
         for i, item in ipairs(section.items) do
             local namePrefix = string.format("ModMenu_%s_%s_%d_%s", section.id, tostring(item.id or item.type), i, suffix)

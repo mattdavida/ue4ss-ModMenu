@@ -10,6 +10,7 @@ local Instance = require("ModMenu.core.instance")
 local Widgets = require("ModMenu.widgets.init")
 local Session = require("ModMenu.shell.session")
 local Dock = require("ModMenu.shell.dock")
+local Collapse = require("ModMenu.shell.collapse")
 local Build = require("ModMenu.shell.build")
 
 local Log = Util.Log
@@ -26,6 +27,8 @@ function M.StopPoll(S)
         end)
         S.pollHandle = nil
     end
+    -- Keep S.pollFn pinned. CancelDelayedAction can still run this tick;
+    -- dropping the Lua function here is what produces "Ref was not function".
 end
 
 local function PollControls(S)
@@ -37,6 +40,8 @@ local function PollControls(S)
     for _, ctrl in ipairs(S.liveControls) do
         if ctrl.kind == "dock" then
             Dock.Poll(S, ctrl)
+        elseif ctrl.kind == "collapse" then
+            Collapse.Poll(S, ctrl)
         else
             local widget = Widgets.get(ctrl.kind)
             if widget and widget.poll then
@@ -45,39 +50,47 @@ local function PollControls(S)
         end
     end
 
-    if not Input.ConsumeMouseClick() then
-        return
-    end
-
-    -- List order. Dropdown.pollClick does option rows then header.
-    for _, ctrl in ipairs(S.liveControls) do
-        if ctrl.kind == "dock" then
-            if Dock.PollClick(S, ctrl) then
-                return
-            end
-        else
-            local widget = Widgets.get(ctrl.kind)
-            if widget and widget.pollClick and widget.pollClick(ctrl, ctx) then
-                return
+    if Input.ConsumeMouseClick() then
+        -- List order. Dropdown.pollClick does option rows then header.
+        for _, ctrl in ipairs(S.liveControls) do
+            if ctrl.kind == "dock" then
+                if Dock.PollClick(S, ctrl) then
+                    break
+                end
+            elseif ctrl.kind == "collapse" then
+                if Collapse.PollClick(S, ctrl) then
+                    break
+                end
+            else
+                local widget = Widgets.get(ctrl.kind)
+                if widget and widget.pollClick and widget.pollClick(ctrl, ctx) then
+                    break
+                end
             end
         end
     end
+
+    -- Collapse show/hide after ipairs so a press-edge + latch cannot both apply.
+    Collapse.Flush(S)
 end
 
 function M.StartPoll(S)
     M.StopPoll(S)
-    S.pollHandle = LoopInGameThreadWithDelay(Session.POLL_MS, function()
-        if not S.menuOpen then
-            return
-        end
-        -- Reclaim when the game steals cursor / click routing (toast, etc.).
-        -- Look-ignore is opt-in (Init ignoreLook) — do not re-lock the camera by default.
-        local pc = UEHelpers.GetPlayerController()
-        if InputMode.CursorStolen(pc) then
-            InputMode.Reclaim()
-        end
-        PollControls(S)
-    end)
+    if S.pollFn == nil then
+        S.pollFn = Util.PinFn(function()
+            if not S.menuOpen then
+                return
+            end
+            -- Reclaim when the game steals cursor / click routing (toast, etc.).
+            -- Look-ignore is opt-in (Init ignoreLook) — do not re-lock the camera by default.
+            local pc = UEHelpers.GetPlayerController()
+            if InputMode.CursorStolen(pc) then
+                InputMode.Reclaim()
+            end
+            PollControls(S)
+        end)
+    end
+    S.pollHandle = LoopInGameThreadWithDelay(Session.POLL_MS, S.pollFn)
 end
 
 --- Host gate for opening (key toggle + ModMenu.Open). Close is never gated.
@@ -111,7 +124,12 @@ function M.Open(S, opts)
     if not Build.Ensure(S) then
         return
     end
-    Build.BuildContent(S)
+    -- Keep the UMG tree across open/close. Create already builds content;
+    -- rebuilding here respawns every searchable row (Give, keybinds, …).
+    -- contentDirty: Register / SetOptions while closed after the first open.
+    if S.contentDirty or S.liveControls == nil or #S.liveControls == 0 then
+        Build.BuildContent(S)
+    end
     S.menuRoot:SetVisibility(Session.VIS_VISIBLE)
     S.menuOpen = true
     Instance.NoteOpened()

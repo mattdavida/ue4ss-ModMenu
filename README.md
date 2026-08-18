@@ -56,7 +56,7 @@ Development uses the multi-file tree (what you edit in this repo):
 ```
 ModMenu.lua                 ← public API facade
 core/                       ← util, umg, shared, config, instance, inputmode, input, options
-shell/                      ← session, dock, build, lifecycle, registry
+shell/                      ← session, dock, collapse, build, lifecycle, registry
 widgets/                    ← one module per item type + registry
 tools/
   bundle.mjs                ← npm run bundle
@@ -233,8 +233,25 @@ Add or **replace** a section by `section.id`. If the menu is open, content rebui
 {
   id = "UniqueId",       -- required
   title = "Display",     -- optional; defaults to id
-  items = { ... },       -- required array
+  collapsible = false,   -- optional; accordion header (title left, + / - right)
+  collapsed = false,     -- optional; start closed (requires collapsible = true)
+  -- onToggle = function(collapsed) end,  -- optional
+  items = { ... },       -- required array (may include type = "fold")
 }
+```
+
+Default is **not** collapsible — existing sections stay always-open. Session remembers open/closed per `id` (re-Register does not reset it; not saved to disk). Nest groups **inside** a section with `type = "fold"` (see **Item types**).
+
+```lua
+ModMenu.Register({
+    id = "Keybinds",
+    title = "Keybinds",
+    collapsible = true,
+    collapsed = true, -- start hidden
+    items = {
+        { type = "label", label = "Set a key per action. Hidden until you open this section." },
+    },
+})
 ```
 
 ### Values
@@ -344,7 +361,7 @@ Natural follow-ons (not required for hosts): tabbed sections, `slider` / stepper
 
 ## Item types
 
-Supported: `checkbox` | `button` | `dropdown` | `label` | `separator` | `number` | `textinput` | `row`  
+Supported: `checkbox` | `button` | `dropdown` | `label` | `separator` | `number` | `textinput` | `row` | `fold`  
 (Implemented in `widgets/<type>.lua`.)
 
 ### `separator`
@@ -435,6 +452,7 @@ options = {
 | `listMaxHeight` | ScrollBox height hint |
 | `allowEmpty` | Allow cleared / placeholder state |
 | `placeholder` | Header text when nothing selected |
+| `onExpand` | Optional `function(list)`. Fires when the picker opens. Option rows are built on first expand (not at menu build), so heavy lists can stay cheap until opened. |
 
 ### `number`
 
@@ -483,7 +501,7 @@ Labeled string field.
 Horizontal group. Children share one line (Unity-style Count + field + button).
 
 Allowed children: `button` | `checkbox` | `label` | `number` | `textinput`  
-(Not: nested `row`, `dropdown`, `separator`.)
+(Not: nested `row`, `dropdown`, `separator`, `fold`. Put a `row` *inside* a `fold` instead.)
 
 ```lua
 {
@@ -515,6 +533,53 @@ Pair with a searchable `dropdown` above the row for the classic select → count
 
 For stacked amount rows, set the same `labelWidth` + `fieldWidth` on every `number` so the fields line up.
 
+### `fold`
+
+Nested collapsible group **inside** a section (keybind categories, extra tools, …). Same accordion chrome as section collapse (title left, `+` / `-` right). Body is always built; toggle only show/hides it.
+
+Default is **collapsed** (`collapsed` omitted or `true`). Pass `collapsed = false` to start open.
+
+Allowed children: `button` | `checkbox` | `dropdown` | `label` | `number` | `row` | `separator` | `textinput`  
+(Not: nested `fold`. Put folds in a collapsible **section** instead.)
+
+`id` is required. `Get` / `Set` / `SetLabel` / `SetButtonLabel` / `SetButtonEnabled` / `SetOptions` resolve fold children, including a control nested in a `row` inside a fold.
+
+Open/closed is session-only per `sectionId.foldId` (same idea as section collapse: survives close/open and `ClientRestart`; not written to disk). Re-Register keeps the current state.
+
+```lua
+ModMenu.Register({
+    id = "Keybinds",
+    title = "Keybinds",
+    collapsible = true,
+    collapsed = true,
+    items = {
+        {
+            type = "fold",
+            id = "movement",
+            label = "Movement",
+            collapsed = true,
+            items = {
+                {
+                    type = "dropdown",
+                    id = "jump",
+                    label = "Jump",
+                    options = { "Space", "C", "Unbound" },
+                    default = "Space",
+                },
+            },
+        },
+        {
+            type = "fold",
+            id = "combat",
+            label = "Combat",
+            items = {
+                { type = "label", label = "Combat binds…" },
+            },
+        },
+    },
+})
+```
+
 ---
 
 ## Dynamic UI patterns
@@ -530,7 +595,7 @@ Prefer this for category filters on a searchable list (see DevTools `items.lua`)
 
 ### Swap which controls exist
 
-Re-call `Register` with the same `id` and a new `items` array (e.g. show Category only for English). Values for ids that still exist are kept when possible; seed `default` on first register.
+Re-call `Register` with the same `id` and a new `items` array (e.g. show Category only for English). Values for ids that still exist are kept when possible; seed `default` on first register. Rebuilds immediately if the menu is **open**. If the menu is closed after the first open, the next `Open` rebuilds.
 
 ### Lazy work on open
 
@@ -554,11 +619,12 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 3. **Input** — while open, uses GameAndUI + mouse cursor. Buttons / dock / dropdowns fire from `UButton:IsPressed()` (rising edge, 16ms poll) plus the LMB latch + `IsHovered()` fallback. Checkboxes poll persistent `IsChecked()` and do not need either. The toggle key uses `Init inputBackend`: `ue4ss` (`RegisterKeyBind`) or `engine` (poll `IsInputKeyDown`). PlayerController often does **not** see LMB while Slate owns the mouse, so engine-backend menus must not rely on the LMB latch alone. Closing one menu does not force GameOnly while another ModMenu is still open (`ModMenu.OpenCount`). `ClientRestart` / `DestroyShell` do not touch input unless this instance had the menu open. On close, `GameOnly` is applied only if the game had no cursor when we opened (mouse-look); hub/inventory cursors are left alone. Camera look is **not** locked unless `Init({ ignoreLook = true })`.
 4. **Dock** — left/right presets only (header button + `SetDock`). No free drag. Session only (not saved to disk).
 5. **Scroll** — the docked panel is a fixed viewport; section content lives in a ScrollBox (mouse wheel). Use `labelWidth` on `number` / `textinput` so amount rows line up like a table.
-6. **FNames** — shell names include `instanceId`; content rebuilds bump an internal generation after `ClearChildren`. Prefer `SetOptions` on searchable lists over constant full rebuilds.
+6. **FNames** — shell names include `instanceId`; content rebuilds bump an internal generation after `ClearChildren`. Collapse / fold expand/collapse show/hide a body and do not rebuild. Prefer `SetOptions` on searchable lists over constant full rebuilds. Menu close/open keeps the UMG tree (no rebuild) so large sections (Give, keybinds) do not respawn on every toggle. `Register` / non-searchable `SetOptions` rebuild **while the menu is open**, and mark the tree dirty if they run while it is closed so the next `Open` rebuilds. `ClientRestart` destroys the shell and rebuilds.
 7. **Large lists** — keep `maxVisible` bounded; filter narrows the working set. Building thousands of UButtons at once is risky.
 8. **Game readiness** — many game objects only exist after a save is loaded; surface that in a status `label` and/or `OnOpen` retry.
 9. **Callbacks** — errors inside `onClick` / `onChange` are caught and logged as `[ModMenu] callback error: ...`.
 10. **Hot-reload** — `ModRef` shared vars (`NextInstanceId`, key claims, open count) are **not** cleared on Ctrl+R.
+11. **Collapse** — opt-in (`collapsible = true`). Accordion header: title on the left, `+` (closed) / `-` (open) on the right. Toggle show/hides the section body (same as dropdowns; no content rebuild). Session-only per section `id` (survives close/open; not written to disk). Re-Register keeps the current open/closed state. Nested groups use `type = "fold"` inside `items` — same session memory per `sectionId.foldId` (see **Item types**).
 
 ### Known limits
 
@@ -570,7 +636,7 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 
 ## Theming & polish
 
-Visual tokens, collapse, and tabs are planned in `vision.md`. Hosts keep the same `Init` / `Register` API while those land.
+Collapsible sections: `Register({ collapsible = true, collapsed = true })`. Nested groups: `{ type = "fold", id, label, items = { ... } }`. Visual tokens and tabs are planned in `vision.md`.
 
 ---
 

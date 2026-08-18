@@ -24,8 +24,17 @@ function M.New(opts)
         menuOpen = false,
         contentGen = 0,
         pollHandle = nil,
+        pollFn = nil, ---@type function|nil strong ref for LoopInGameThreadWithDelay
         hooksInstalled = false,
         liveControls = {},
+        contentDirty = false, --- rebuild on next Open after Register/SetOptions while closed
+        collapsedById = {}, ---@type table<string, boolean>
+        foldCollapsedByKey = {}, ---@type table<string, boolean> "sectionId.foldId"
+        pendingCollapseId = nil, ---@type string|nil
+        pendingCollapseSource = nil, ---@type string|nil
+        collapseApplyQueue = {}, ---@type { id: string, source: string|nil }[]
+        collapseApplyFn = nil, ---@type function|nil
+        collapseApplyScheduled = false,
         makeWidgetCtx = nil, ---@type fun(): table
     }
 end

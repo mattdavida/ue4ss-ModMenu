@@ -37,6 +37,8 @@
   never collide on ModMenu_Root_1 under the same GameInstance.
 
   Dock presets: Left / Right via header button (session only; no free drag).
+  Collapsible sections: Register({ collapsible = true, collapsed = true }).
+  Nested fold: { type = "fold", id, label, collapsed = true, items = { ... } }.
 
   Internals: core/ helpers + widgets/ registry (see README.md).
 ]]
@@ -96,6 +98,7 @@ S.makeWidgetCtx = function()
         EnsureMenuVisible = function()
             Session.EnsureVisible(S)
         end,
+        foldCollapsedByKey = S.foldCollapsedByKey,
     }
 end
 
