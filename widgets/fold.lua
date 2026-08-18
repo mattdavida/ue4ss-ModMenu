@@ -8,6 +8,7 @@
 local Umg = require("ModMenu.core.umg")
 local Input = require("ModMenu.core.input")
 local Session = require("ModMenu.shell.session")
+local Theme = require("ModMenu.core.theme")
 
 local Widgets ---@type table|nil
 
@@ -19,9 +20,6 @@ local VIS_COLLAPSED = Session.VIS_COLLAPSED
 
 local MARK_COLLAPSED = "+"
 local MARK_EXPANDED = "-"
-
-local HEADER_BG = { R = 0.10, G = 0.13, B = 0.20, A = 1.0 }
-local MARK_COLOR = { R = 0.72, G = 0.76, B = 0.82, A = 1.0 }
 
 local ALLOWED = {
     button = true,
@@ -116,12 +114,13 @@ function Fold.build(ctx)
         end
         collapsed = foldMap[foldKey] == true
     end
+    local colors = Theme.Of(ctx.config)
     local fontSize = ctx.config.fontHint or ctx.config.fontSection or 14
     local namePrefix = ctx.namePrefix
 
     local headerBtn = umg.Construct("/Script/UMG.Button", ctx.contentBox, namePrefix .. "_Hdr")
     pcall(function()
-        headerBtn:SetBackgroundColor(HEADER_BG)
+        headerBtn:SetBackgroundColor(colors.sectionHeaderBg)
         if headerBtn.SetClickMethod then
             headerBtn:SetClickMethod(1)
         end
@@ -129,7 +128,7 @@ function Fold.build(ctx)
 
     local headerRow = umg.Construct("/Script/UMG.HorizontalBox", headerBtn, namePrefix .. "_HdrRow")
     local title = umg.Construct("/Script/UMG.TextBlock", headerRow, namePrefix .. "_Title")
-    umg.StyleText(title, fontSize)
+    umg.StyleText(title, fontSize, colors.textPrimary)
     umg.SetLabelText(title, tostring(item.label))
     local titleSlot = headerRow:AddChildToHorizontalBox(title)
     pcall(function()
@@ -139,7 +138,7 @@ function Fold.build(ctx)
     end)
 
     local mark = umg.Construct("/Script/UMG.TextBlock", headerRow, namePrefix .. "_Mark")
-    umg.StyleText(mark, fontSize, MARK_COLOR)
+    umg.StyleText(mark, fontSize, colors.sectionMark)
     umg.SetLabelText(mark, Mark(collapsed))
     local markSlot = headerRow:AddChildToHorizontalBox(mark)
     pcall(function()

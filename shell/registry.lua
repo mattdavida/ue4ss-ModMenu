@@ -18,6 +18,7 @@ local ValueKey = Util.ValueKey
 local SetLabelText = Umg.SetLabelText
 local NormalizeOptions = Options.NormalizeOptions
 local Dropdown = Widgets.get("dropdown")
+local Button = Widgets.get("button")
 
 local M = {}
 
@@ -199,6 +200,22 @@ function M.SetButtonLabel(S, sectionId, itemId, text)
     return true
 end
 
+local function SyncLiveButton(S, sectionId, itemId)
+    local ctx = S.makeWidgetCtx()
+    for _, ctrl in ipairs(S.liveControls) do
+        if ctrl.kind == "button"
+            and ctrl.sectionId == sectionId
+            and ctrl.item
+            and ctrl.item.id == itemId
+        then
+            if Button and Button.applyChrome then
+                Button.applyChrome(ctrl, ctx)
+            end
+            return
+        end
+    end
+end
+
 function M.SetButtonEnabled(S, sectionId, itemId, enabled)
     local idx = S.sectionIndexById[sectionId]
     if not idx then
@@ -209,23 +226,42 @@ function M.SetButtonEnabled(S, sectionId, itemId, enabled)
     if not item then
         return false
     end
-    local on = enabled and true or false
-    item.enabled = on
-    for _, ctrl in ipairs(S.liveControls) do
-        if ctrl.kind == "button"
-            and ctrl.sectionId == sectionId
-            and ctrl.item
-            and ctrl.item.id == itemId
-        then
-            ctrl.enabled = on
-            if IsValid(ctrl.widget) then
-                pcall(function()
-                    ctrl.widget:SetIsEnabled(on)
-                end)
-            end
-            return true
-        end
+    item.enabled = enabled and true or false
+    SyncLiveButton(S, sectionId, itemId)
+    return true
+end
+
+function M.SetButtonVariant(S, sectionId, itemId, variant)
+    local idx = S.sectionIndexById[sectionId]
+    if not idx then
+        return false
     end
+    local section = S.sections[idx]
+    local item = FindItemById(section.items, itemId, "button")
+    if not item then
+        return false
+    end
+    local normalized = Button.NormalizeVariant(variant)
+    if normalized == nil then
+        error("SetButtonVariant: variant must be default|primary|secondary|success|danger|warning|info")
+    end
+    item.variant = normalized
+    SyncLiveButton(S, sectionId, itemId)
+    return true
+end
+
+function M.SetButtonActive(S, sectionId, itemId, active)
+    local idx = S.sectionIndexById[sectionId]
+    if not idx then
+        return false
+    end
+    local section = S.sections[idx]
+    local item = FindItemById(section.items, itemId, "button")
+    if not item then
+        return false
+    end
+    item.active = active and true or false
+    SyncLiveButton(S, sectionId, itemId)
     return true
 end
 

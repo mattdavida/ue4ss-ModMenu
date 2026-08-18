@@ -42,6 +42,7 @@ Reference feel: Silksong-style cheats UI — tabs, collapsible groups, checkbox 
 - [x] Per-mod shell (`Init`, instance ids, viewport Z, key claims)
 - [x] Sections + item registry (`checkbox`, `button`, `dropdown`, `label`, `separator`)
 - [x] Dock left / right, layout fractions, font size knobs
+- [x] Author themes (`Init({ theme = "light"|"dark", colors = { ... } })`)
 - [x] Open lifecycle (`OnOpen`); open / close / toggle API
 - [x] Multi-menu open-count (don’t yank GameOnly while another shell is open)
 - [x] UE4 / UE5 `SetInputMode_*` arity fallback (`bFlushInput`)
@@ -50,11 +51,12 @@ Reference feel: Silksong-style cheats UI — tabs, collapsible groups, checkbox 
 ### Intentionally out of ModMenu core
 
 - [x] Game-specific software cursors (e.g. Thymesia `NativeUtils` / UIPage stack) — host responsibility; document as known limit
+- [x] Player-facing theme picker — hosts choose `theme` at `Init`
 
 ### Gaps vs north star
 
-- [ ] Theme token system (colors, spacing) — colors mostly hardcoded
-- [ ] Light / dark presets
+- [x] Theme token system (colors via `Init`; spacing still mostly magic numbers)
+- [x] Light / dark author presets (`Init`; not a player toggle)
 - [x] Collapsible sections + nested `fold` groups
 - [ ] Tabs / section groups
 - [ ] Button / checkbox visual polish (states, grids)
@@ -85,25 +87,25 @@ Goal: one day-ish pass that makes every control look intentional without changin
 
 ### Design
 
-- [ ] Introduce `config.theme` (or flat color keys) resolved in `Init`
-- [ ] Ship two presets: `dark` (default, close to current) and `light`
-- [ ] Token list (minimum):
-  - [ ] `panelBg`, `panelBorder`
-  - [ ] `textPrimary`, `textMuted`, `textAccent`
-  - [ ] `buttonBg`, `buttonBgHover` (hover optional / best-effort)
-  - [ ] `checkbox`, `separator`
-  - [ ] `dropdownHeader`, `dropdownOption`, `dropdownActive`
-  - [ ] `sectionTitle`
-  - [ ] padding / spacer scale (`padPanel`, `gapItem`, `gapSection`)
-- [ ] Pass theme through widget `ctx` (already has `config`)
-- [ ] Replace hardcoded colors in `shell/build.lua` + `widgets/*` + `core/umg.lua` helpers
+- [x] Introduce `config.theme` + `config.colors` resolved in `Init`
+- [x] Ship two presets: `light` (current look, default) and `dark` (charcoal panel)
+- [x] Token list (minimum):
+  - [x] `panelBg`, `panelBorder`
+  - [x] `textPrimary`, `textMuted`, `textAccent`, `textStatus`
+  - [x] `buttonBg` (`buttonBgHover` still out — constructed UButtons are flat)
+  - [ ] `checkbox` native tint / `separator` color (separator is still a spacer)
+  - [x] `dropdownHeader`, `dropdownOption` (`dropdownActive` later)
+  - [x] `sectionHeaderBg` / `sectionMark`
+  - [x] `padPanel` per preset (`gapItem` / `gapSection` still hardcoded)
+- [x] Pass theme through widget `ctx` (`config.colors`)
+- [x] Replace hardcoded colors in `shell/build.lua` + `widgets/*` + `core/umg.lua` helpers
 
 ### API sketch
 
 ```lua
 ModMenu.Init({
     title = "Dev Tools",
-    theme = "dark", -- or "light"
+    theme = "dark", -- or "light" (default)
     -- optional overrides:
     -- colors = { panelBg = { R=..., G=..., B=..., A=... }, ... }
 })
@@ -111,12 +113,12 @@ ModMenu.Init({
 
 ### Verify
 
-- [ ] Dark preset ≈ current look (no host breakage)
-- [ ] Light preset readable on bright game backdrops
-- [ ] Dropdown / button / checkbox all consume tokens
+- [ ] `light` ≈ previous look (no host breakage if `theme` is omitted)
+- [ ] `dark` readable vs `GithubAssets/ModMenuVision.png`
+- [x] Dropdown / button / fields consume tokens
 - [ ] Deploy + smoke on one UE5 game
 
-**Exit:** hosts can switch light/dark; contributors never hardcode one-off hex in widgets without a token.
+**Exit:** hosts can pick light/dark at Init; contributors never hardcode one-off RGB in widgets without a token.
 
 ---
 
@@ -151,7 +153,7 @@ Goal: biggest UX win for large cheat menus (Silksong-style groups).
 Goal: make existing types feel finished (still no tabs).
 
 - [ ] Checkbox: clearer on/off affordance (aligned label, stronger checked state)
-- [ ] Button: consistent height, padding, optional `variant` (`default` | `danger` | `accent`)
+- [x] Button: Bootstrap-like `variant` (`default` \| `primary` \| `secondary` \| `success` \| `danger` \| `warning` \| `info`) + `active` (selected/on) + themed `enabled`
 - [ ] Dropdown: active option styling; cleaner search field chrome
 - [ ] Label / separator: muted hierarchy under theme tokens
 - [ ] Hover feedback where UMG constructed controls allow (best-effort; document limits)
@@ -286,7 +288,7 @@ Goal: meaningful “finished” for the north-star journey.
 | Phase | Name                 | Status |
 |-------|----------------------|--------|
 | 0     | Foundation docs      | Done (docs) |
-| 1     | Theme tokens         | Not started |
+| 1     | Theme tokens         | Done (code; smoke open) |
 | 2     | Collapsible sections | Done (code; nested fold) |
 | 3     | Control polish       | Not started |
 | 4     | Layout density       | Not started |

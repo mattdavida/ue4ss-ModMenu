@@ -4,6 +4,7 @@
 
 local Util = require("ModMenu.core.util")
 local Umg = require("ModMenu.core.umg")
+local Theme = require("ModMenu.core.theme")
 local Options = require("ModMenu.core.options")
 local Input = require("ModMenu.core.input")
 
@@ -13,10 +14,6 @@ Dropdown.type = "dropdown"
 local VIS_VISIBLE = 0
 local VIS_COLLAPSED = 1
 
-local LIGHT_ROW_BG = { R = 0.88, G = 0.90, B = 0.94, A = 1.0 }
-local LIGHT_ROW_TEXT = { R = 0.06, G = 0.07, B = 0.10, A = 1.0 }
-local HEADER_BG = { R = 0.22, G = 0.28, B = 0.40, A = 1.0 }
-local HEADER_TEXT = { R = 0.98, G = 0.98, B = 1.0, A = 1.0 }
 local DROPDOWN_LIST_MAX_HEIGHT = 320
 local DROPDOWN_SEARCHABLE_MAX_ROWS = 400
 
@@ -45,6 +42,8 @@ local function RebuildRows(ctrl)
     local matched = 0
     local shown = 0
     local fontDropdown = ctrl.fontDropdown or 15
+    local optionBg = ctrl.optionBg
+    local optionText = ctrl.optionText
 
     for _, opt in ipairs(ctrl.list or {}) do
         if Options.OptionMatchesFilter(opt.label, filter) then
@@ -56,8 +55,8 @@ local function RebuildRows(ctrl)
                     ctrl.listBox,
                     ctrl.namePrefix .. "_Opt" .. tostring(dropdownRowSerial),
                     opt.label,
-                    LIGHT_ROW_BG,
-                    LIGHT_ROW_TEXT,
+                    optionBg,
+                    optionText,
                     fontDropdown
                 )
                 ctrl.listBox:AddChildToVerticalBox(btn)
@@ -138,6 +137,7 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
     local allowEmpty = dropOpts.allowEmpty == true or searchable or dropOpts.placeholder ~= nil
     local fontDropdown = config.fontDropdown or 15
     local fontHint = config.fontHint or 14
+    local colors = Theme.Of(config)
 
     local list, labelToValue, valueToLabel = Options.NormalizeOptions(options)
     selectedValue = Util.ToPlainString(selectedValue) or selectedValue
@@ -155,7 +155,7 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
 
     local headerBtn = Umg.Construct("/Script/UMG.Button", root, namePrefix .. "_Header_Btn")
     pcall(function()
-        headerBtn:SetBackgroundColor(HEADER_BG)
+        headerBtn:SetBackgroundColor(colors.dropdownHeaderBg)
         if headerBtn.SetClickMethod then
             headerBtn:SetClickMethod(1)
         end
@@ -163,7 +163,7 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
     local headerRow = Umg.Construct("/Script/UMG.HorizontalBox", headerBtn, namePrefix .. "_HeaderRow")
 
     local valueLabel = Umg.Construct("/Script/UMG.TextBlock", headerRow, namePrefix .. "_Value")
-    Umg.StyleText(valueLabel, fontDropdown, HEADER_TEXT)
+    Umg.StyleText(valueLabel, fontDropdown, colors.dropdownHeaderText)
     Umg.SetLabelText(valueLabel, tostring(selectedLabel))
     local valueSlot = headerRow:AddChildToHorizontalBox(valueLabel)
     pcall(function()
@@ -173,7 +173,7 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
     end)
 
     local arrowLabel = Umg.Construct("/Script/UMG.TextBlock", headerRow, namePrefix .. "_Arrow")
-    Umg.StyleText(arrowLabel, fontDropdown, HEADER_TEXT)
+    Umg.StyleText(arrowLabel, fontDropdown, colors.dropdownHeaderText)
     Umg.SetLabelText(arrowLabel, "▼")
     local arrowSlot = headerRow:AddChildToHorizontalBox(arrowLabel)
     pcall(function()
@@ -196,7 +196,7 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
     if searchable then
         local searchBorder = Umg.Construct("/Script/UMG.Border", optionsBox, namePrefix .. "_SearchBorder")
         pcall(function()
-            searchBorder:SetBrushColor(LIGHT_ROW_BG)
+            searchBorder:SetBrushColor(colors.fieldBg)
             searchBorder:SetPadding({ Left = 8, Top = 6, Right = 8, Bottom = 6 })
         end)
         searchBox = Umg.Construct("/Script/UMG.EditableTextBox", searchBorder, namePrefix .. "_Search")
@@ -241,7 +241,7 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
     local moreLabel = nil
     if searchable then
         moreLabel = Umg.Construct("/Script/UMG.TextBlock", optionsBox, namePrefix .. "_More")
-        Umg.StyleText(moreLabel, fontHint, { R = 0.7, G = 0.75, B = 0.85, A = 1.0 })
+        Umg.StyleText(moreLabel, fontHint, colors.dropdownMore)
         Umg.SetLabelText(moreLabel, "")
         pcall(function()
             moreLabel:SetVisibility(VIS_COLLAPSED)
@@ -272,6 +272,8 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
         arrowLabel = arrowLabel,
         optionsBox = optionsBox,
         optionRows = {},
+        optionBg = colors.dropdownOptionBg,
+        optionText = colors.dropdownOptionText,
         expanded = false,
         headerWasPressed = false,
     }
@@ -365,6 +367,8 @@ function Dropdown.build(ctx)
         arrowLabel = picker.arrowLabel,
         optionsBox = picker.optionsBox,
         optionRows = picker.optionRows,
+        optionBg = picker.optionBg,
+        optionText = picker.optionText,
         expanded = false,
         headerWasPressed = false,
     })

@@ -11,6 +11,7 @@
 
 local Util = require("ModMenu.core.util")
 local Umg = require("ModMenu.core.umg")
+local Theme = require("ModMenu.core.theme")
 local Input = require("ModMenu.core.input")
 local Session = require("ModMenu.shell.session")
 
@@ -20,9 +21,6 @@ local SafeCall = Util.SafeCall
 -- Isolated on the right like a shadcn chevron. ASCII so game fonts stay valid.
 local MARK_COLLAPSED = "+"
 local MARK_EXPANDED = "-"
-
-local HEADER_BG = { R = 0.10, G = 0.13, B = 0.20, A = 1.0 }
-local MARK_COLOR = { R = 0.72, G = 0.76, B = 0.82, A = 1.0 }
 
 local M = {}
 
@@ -237,17 +235,18 @@ end
 function M.BuildHeader(S, section, contentBox, suffix)
     local collapsed = M.IsCollapsed(S, section)
     local name = string.format("ModMenu_SecHdr_%s_%s", section.id, suffix)
+    local colors = Theme.Of(S.config)
     local fontSize = S.config.fontSection
     local titleText = tostring(section.title or section.id)
 
     local button = Umg.Construct("/Script/UMG.Button", contentBox, name .. "_Btn")
     local row = Umg.Construct("/Script/UMG.HorizontalBox", button, name .. "_Row")
-    local title = AddHeaderText(row, name .. "_Title", titleText, fontSize, nil, true)
-    local mark = AddHeaderText(row, name .. "_Mark", M.Mark(collapsed), fontSize, MARK_COLOR, false)
+    local title = AddHeaderText(row, name .. "_Title", titleText, fontSize, colors.textPrimary, true)
+    local mark = AddHeaderText(row, name .. "_Mark", M.Mark(collapsed), fontSize, colors.sectionMark, false)
 
     pcall(function()
         button:SetContent(row)
-        button:SetBackgroundColor(HEADER_BG)
+        button:SetBackgroundColor(colors.sectionHeaderBg)
         if button.SetClickMethod then
             button:SetClickMethod(1) -- MouseDown; matches other constructed buttons
         end

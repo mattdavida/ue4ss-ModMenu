@@ -55,7 +55,7 @@ Development uses the multi-file tree (what you edit in this repo):
 
 ```
 ModMenu.lua                 ← public API facade
-core/                       ← util, umg, shared, config, instance, inputmode, input, options
+core/                       ← util, theme, umg, shared, config, instance, inputmode, input, options
 shell/                      ← session, dock, collapse, build, lifecycle, registry
 widgets/                    ← one module per item type + registry
 tools/
@@ -86,6 +86,7 @@ ModMenu.Init({
     key = Key.F6,
     keyHint = "F6",
     dock = "left", -- "left" | "right"
+    -- theme = "dark", -- charcoal panel; omit for the current ("light") look
     -- inputBackend = "engine", -- opt-in when RegisterKeyBind does not fire
     -- consoleCommand = "modmenu",
 })
@@ -186,6 +187,8 @@ Configure and bind this mod’s shell. Safe to call more than once (updates conf
 | `topFrac` / `bottomFrac` | `0.05` | Vertical margins |
 | `rightFrac` | `0.01` | Edge margin (both docks) |
 | `fontTitle` / `fontHint` / `fontItem` / `fontSection` / `fontDropdown` | 22 / 14 / 16 / 18 / 15 | Optional. Compact defaults (scale up per-game if needed). `fontDropdown` is header + option rows; match `fontItem` to size dropdowns like buttons. |
+| `theme` | `"light"` | Author preset. `"light"` is the current look (navy panel, light fields). `"dark"` is charcoal panel, dark fields, teal/gold tokens. Not a player setting. |
+| `colors` | from `theme` | Optional overrides: `{ panelBg = { R, G, B, A }, ... }`. Merged onto the preset. See **Theming**. |
 | `canOpen` | `nil` | Optional `function(): boolean` or `false, "reason"`. Gates **open** (key toggle + `ModMenu.Open`); close is never gated. Pass `false` on a later `Init` to clear. |
 | `ignoreLook` | `false` | Opt-in. While open, `SetIgnoreLookInput(true)` so mouse-look games do not spin the camera. Default off — hosts that need a locked camera must pass `true`. |
 
@@ -275,10 +278,12 @@ Label items need an `id` for this to work.
 
 ```lua
 ModMenu.SetButtonLabel(sectionId, itemId, "Scanning...")
-ModMenu.SetButtonEnabled(sectionId, itemId, false)  -- blocks poll clicks + UMG SetIsEnabled
+ModMenu.SetButtonEnabled(sectionId, itemId, false)  -- no clicks + themed disabled chrome
+ModMenu.SetButtonVariant(sectionId, itemId, "danger")  -- default|primary|secondary|success|danger|warning|info
+ModMenu.SetButtonActive(sectionId, itemId, true)     -- selected/on (green)
 ```
 
-Button items need an `id`. Optional Register field: `enabled = false` (default true).
+Button items need an `id`. Optional Register fields: `enabled = false`, `variant = "primary"|"danger"|…`, `active = true`. Paint order: disabled, then active, then variant. `accent` is accepted as an alias of `primary`.
 
 ### Dropdown options
 
@@ -313,7 +318,7 @@ ModMenu.GetDock()
 
 ## Extending: widget contract
 
-Item types live under `widgets/`. The shell never hard-codes control UMG — it asks the registry. Do **not** `require` dropdown (or any widget type) from `ModMenu.lua`; the facade stays wire + public API. Host-facing `SetLabel` / `SetButtonLabel` / `SetButtonEnabled` names stay.
+Item types live under `widgets/`. The shell never hard-codes control UMG — it asks the registry. Do **not** `require` dropdown (or any widget type) from `ModMenu.lua`; the facade stays wire + public API. Host-facing `SetLabel` / `SetButtonLabel` / `SetButtonEnabled` / `SetButtonVariant` / `SetButtonActive` names stay.
 
 ### Contract
 
@@ -384,12 +389,26 @@ Supported: `checkbox` | `button` | `dropdown` | `label` | `separator` | `number`
   type = "button",
   id = "run",
   label = "Do thing",
-  enabled = true,  -- optional; false disables clicks / greys out
+  enabled = true,   -- optional; false blocks clicks + disabled chrome
+  variant = "default", -- optional: default|primary|secondary|success|danger|warning|info
+  active = false,   -- optional; true = selected/on (wins over variant)
   onClick = function() end,
 }
 ```
 
-Use `SetButtonLabel` / `SetButtonEnabled` for busy states (e.g. “Scanning…”).
+Use `SetButtonLabel` / `SetButtonEnabled` / `SetButtonVariant` / `SetButtonActive` for busy and toggle-on states.
+
+| Variant | Use |
+|---------|-----|
+| `default` | Theme button (navy / charcoal) |
+| `primary` | Main action (blue) |
+| `secondary` | Muted gray |
+| `success` | Positive confirm (green) |
+| `danger` | Destructive (red) |
+| `warning` | Caution / “Award ALL” (yellow) |
+| `info` | Informational (cyan) |
+
+`active = true` is **selected/on**, not a variant. Hover/pressed restyle is not implemented (constructed UButtons are flat). No outline / link variants (UMG fill only).
 
 ### `checkbox`
 
@@ -636,7 +655,28 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 
 ## Theming & polish
 
-Collapsible sections: `Register({ collapsible = true, collapsed = true })`. Nested groups: `{ type = "fold", id, label, items = { ... } }`. Visual tokens and tabs are planned in `vision.md`.
+Author-facing (set once in `Init`). Players do not pick a theme.
+
+```lua
+ModMenu.Init({
+    title = "My Cheats",
+    theme = "dark", -- or "light" (default — current look)
+    -- colors = {
+    --     textAccent = { R = 0.12, G = 0.72, B = 0.70, A = 1.0 },
+    -- },
+})
+```
+
+| Preset | Look |
+|--------|------|
+| `light` | Current ModMenu: navy panel, mid-blue buttons, light editable fields |
+| `dark` | Charcoal panel, thin edge, dark fields, teal (`textAccent`) + gold (`textStatus`) |
+
+`textAccent` / `textStatus` remain for tabs/status. Button variants use their own `buttonBg*` / `buttonText*` tokens (Bootstrap-like primary/danger/warning).
+
+North-star look: `GithubAssets/ModMenuVision.png`. Tabs, 2-column grids, and hover/glow are still `vision.md` Phases 3–5 — constructed UMG is flat colors, not bevels.
+
+Collapsible sections: `Register({ collapsible = true, collapsed = true })`. Nested groups: `{ type = "fold", id, label, items = { ... } }`.
 
 ---
 

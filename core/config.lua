@@ -2,6 +2,8 @@
   ModMenu.core.config — default Init table, option merge, small normalizers.
 ]]
 
+local Theme = require("ModMenu.core.theme")
+
 local M = {}
 
 function M.New()
@@ -13,6 +15,8 @@ function M.New()
         topFrac = 0.05,
         bottomFrac = 0.05,
         rightFrac = 0.01, -- edge margin used for both left and right docks
+        theme = "light", -- "light" (current look) | "dark" (charcoal panel)
+        colors = Theme.Preset("light"),
         fontTitle = 22,
         fontHint = 14,
         fontItem = 16,
@@ -72,6 +76,15 @@ function M.ApplyInit(config, opts, ctx)
     if opts.bottomFrac ~= nil then config.bottomFrac = opts.bottomFrac end
     if opts.rightFrac ~= nil then config.rightFrac = opts.rightFrac end
     if opts.dock ~= nil then config.dock = M.NormalizeDock(opts.dock) end
+    if opts.theme ~= nil then
+        config.theme = Theme.Normalize(opts.theme)
+        config.colors = Theme.Resolve(config.theme, opts.colors)
+    elseif opts.colors ~= nil then
+        if type(opts.colors) ~= "table" then
+            error("ModMenu.Init: colors must be a table of { R, G, B, A } tokens")
+        end
+        config.colors = Theme.Merge(config.colors, opts.colors)
+    end
     if opts.fontTitle ~= nil then config.fontTitle = opts.fontTitle end
     if opts.fontHint ~= nil then config.fontHint = opts.fontHint end
     if opts.fontItem ~= nil then config.fontItem = opts.fontItem end

@@ -21,6 +21,8 @@ function M.New(opts)
         menuRoot = nil,
         contentBox = nil,
         panelSlot = nil,
+        panelBorder = nil, ---@type any fill Border
+        panelOutline = nil, ---@type any 1px outline Border
         menuOpen = false,
         contentGen = 0,
         pollHandle = nil,

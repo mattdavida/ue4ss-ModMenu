@@ -3,11 +3,13 @@
 ]]
 
 local Util = require("ModMenu.core.util")
+local Theme = require("ModMenu.core.theme")
 
 local M = {}
 
 local defaults = {
     fontItem = 16,
+    colors = nil, ---@type table|nil resolved in Init
 }
 
 function M.SetDefaults(opts)
@@ -15,6 +17,13 @@ function M.SetDefaults(opts)
     if opts.fontItem ~= nil then
         defaults.fontItem = opts.fontItem
     end
+    if opts.colors ~= nil then
+        defaults.colors = opts.colors
+    end
+end
+
+local function Colors()
+    return defaults.colors or Theme.Preset("light")
 end
 
 local function FindClass(path)
@@ -35,7 +44,7 @@ function M.Construct(classPath, outer, name)
 end
 
 function M.StyleText(textBlock, size, color)
-    color = color or { R = 0.95, G = 0.95, B = 0.98, A = 1.0 }
+    color = color or Colors().textPrimary
     pcall(function()
         if textBlock.Font then
             textBlock.Font.Size = size or defaults.fontItem
@@ -129,39 +138,57 @@ function M.AddItemPad(ctx, name, size)
     M.AddSpacer(ctx.contentBox, name, size or 8)
 end
 
--- Match searchable dropdown filter field (light bg + dark text).
-local FIELD_BG = { R = 0.88, G = 0.90, B = 0.94, A = 1.0 }
-local FIELD_TEXT = { R = 0.06, G = 0.07, B = 0.10, A = 1.0 }
-local FIELD_HINT = { R = 0.35, G = 0.38, B = 0.45, A = 1.0 }
-
---- Style an EditableTextBox like the dropdown filter (light bg, dark text).
+--- Style an EditableTextBox from theme field tokens.
+--- The engine's default slate box is light-grey; WidgetStyle.BackgroundColor
+--- often does not tint it. Hide those brushes and let the wrapping Border
+--- (CreateLabeledEditable / dropdown search) be the visible fill.
 function M.StyleEditableTextBox(edit, fontSize)
     if edit == nil then
         return
     end
+    local colors = Colors()
+    local fill = colors.fieldBg
+    local dark = colors.fieldText
+    local hint = colors.fieldHint
+    local slateFill = { SpecifiedColor = fill, ColorUseRule = 0 }
+    local slateText = { SpecifiedColor = dark, ColorUseRule = 0 }
+    local slateHint = { SpecifiedColor = hint, ColorUseRule = 0 }
+
     pcall(function()
-        edit:SetForegroundColor(FIELD_TEXT)
+        edit:SetForegroundColor(dark)
     end)
     pcall(function()
         local style = edit.WidgetStyle
         if style == nil then
             return
         end
-        local dark = FIELD_TEXT
-        local hint = FIELD_HINT
-        local bg = FIELD_BG
-        if style.ForegroundColor ~= nil then
-            style.ForegroundColor = { SpecifiedColor = dark, ColorUseRule = 0 }
-        end
-        if style.BackgroundColor ~= nil then
-            style.BackgroundColor = bg
-        end
-        if style.FocusedForegroundColor ~= nil then
-            style.FocusedForegroundColor = { SpecifiedColor = dark, ColorUseRule = 0 }
+        pcall(function()
+            style.ForegroundColor = slateText
+        end)
+        pcall(function()
+            style.BackgroundColor = slateFill
+        end)
+        pcall(function()
+            style.FocusedForegroundColor = slateText
+        end)
+        for _, key in ipairs({
+            "BackgroundImageNormal",
+            "BackgroundImageHovered",
+            "BackgroundImageFocused",
+            "BackgroundImageReadOnly",
+        }) do
+            local brush = style[key]
+            if brush ~= nil then
+                pcall(function()
+                    brush.TintColor = slateFill
+                    -- ESlateBrushDrawType::NoDrawType — Border behind the field is the fill.
+                    brush.DrawAs = 0
+                end)
+            end
         end
         if style.TextStyle ~= nil then
             if style.TextStyle.ColorAndOpacity ~= nil then
-                style.TextStyle.ColorAndOpacity = { SpecifiedColor = dark, ColorUseRule = 0 }
+                style.TextStyle.ColorAndOpacity = slateText
             end
             if style.TextStyle.Font ~= nil and style.TextStyle.Font.Size ~= nil and fontSize then
                 style.TextStyle.Font.Size = fontSize
@@ -169,17 +196,18 @@ function M.StyleEditableTextBox(edit, fontSize)
         end
         if style.HintTextStyle ~= nil then
             if style.HintTextStyle.ColorAndOpacity ~= nil then
-                style.HintTextStyle.ColorAndOpacity = { SpecifiedColor = hint, ColorUseRule = 0 }
+                style.HintTextStyle.ColorAndOpacity = slateHint
             end
             if style.HintTextStyle.Font ~= nil and style.HintTextStyle.Font.Size ~= nil and fontSize then
                 style.HintTextStyle.Font.Size = fontSize
             end
         end
+        edit.WidgetStyle = style
     end)
 end
 
 --- Labeled single-line field: HorizontalBox(label + SizeBox(Border(EditableTextBox))).
---- Same light-field treatment as the searchable dropdown filter.
+--- Field chrome follows the active theme (light fields on light, dark on dark).
 --- @return root, editBox, label
 function M.CreateLabeledEditable(outer, namePrefix, caption, initialText, opts)
     opts = opts or {}
@@ -217,7 +245,7 @@ function M.CreateLabeledEditable(outer, namePrefix, caption, initialText, opts)
 
     local border = M.Construct("/Script/UMG.Border", sizeBox, namePrefix .. "_Border")
     pcall(function()
-        border:SetBrushColor(FIELD_BG)
+        border:SetBrushColor(Colors().fieldBg)
         border:SetPadding({ Left = 8, Top = 4, Right = 8, Bottom = 4 })
     end)
 
@@ -261,11 +289,11 @@ end
 function M.CreateTextButton(outer, namePrefix, caption, bgColor, textColor, fontSize)
     local button = M.Construct("/Script/UMG.Button", outer, namePrefix .. "_Btn")
     local label = M.Construct("/Script/UMG.TextBlock", button, namePrefix .. "_BtnLabel")
-    M.StyleText(label, fontSize or defaults.fontItem, textColor)
+    M.StyleText(label, fontSize or defaults.fontItem, textColor or Colors().buttonText)
     M.SetLabelText(label, caption)
     pcall(function()
         button:SetContent(label)
-        button:SetBackgroundColor(bgColor or { R = 0.18, G = 0.22, B = 0.32, A = 1.0 })
+        button:SetBackgroundColor(bgColor or Colors().buttonBg)
         -- MouseDown: pressed state as soon as the pointer goes down (helps IsPressed poll).
         if button.SetClickMethod then
             button:SetClickMethod(1)

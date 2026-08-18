@@ -12,6 +12,7 @@ local Session = require("ModMenu.shell.session")
 local Dock = require("ModMenu.shell.dock")
 local Collapse = require("ModMenu.shell.collapse")
 local Build = require("ModMenu.shell.build")
+local Theme = require("ModMenu.core.theme")
 
 local Log = Util.Log
 local IsValid = Util.IsValid
@@ -160,6 +161,31 @@ function M.Toggle(S)
         M.Close(S)
     else
         M.Open(S)
+    end
+end
+
+--- Re-apply panel fill/outline after Init. Rebuild content if the shell exists.
+function M.OnConfigChanged(S)
+    local colors = Theme.Of(S.config)
+    if IsValid(S.panelBorder) then
+        pcall(function()
+            S.panelBorder:SetBrushColor(colors.panelBg)
+            S.panelBorder:SetPadding(Theme.PadPanel(S.config))
+        end)
+    end
+    if IsValid(S.panelOutline) then
+        pcall(function()
+            S.panelOutline:SetBrushColor(colors.panelBorder)
+        end)
+    end
+    if not IsValid(S.menuRoot) then
+        return
+    end
+    if S.menuOpen then
+        Build.BuildContent(S)
+        Input.ClearClickState()
+    else
+        S.contentDirty = true
     end
 end
 
