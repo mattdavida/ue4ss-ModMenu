@@ -11,6 +11,7 @@ local Widgets = require("ModMenu.widgets.init")
 local Session = require("ModMenu.shell.session")
 local Dock = require("ModMenu.shell.dock")
 local Collapse = require("ModMenu.shell.collapse")
+local Tabs = require("ModMenu.shell.tabs")
 local Build = require("ModMenu.shell.build")
 local Theme = require("ModMenu.core.theme")
 
@@ -43,6 +44,8 @@ local function PollControls(S)
             Dock.Poll(S, ctrl)
         elseif ctrl.kind == "collapse" then
             Collapse.Poll(S, ctrl)
+        elseif ctrl.kind == "tab" then
+            Tabs.Poll(S, ctrl)
         else
             local widget = Widgets.get(ctrl.kind)
             if widget and widget.poll then
@@ -62,6 +65,10 @@ local function PollControls(S)
                 if Collapse.PollClick(S, ctrl) then
                     break
                 end
+            elseif ctrl.kind == "tab" then
+                if Tabs.PollClick(S, ctrl) then
+                    break
+                end
             else
                 local widget = Widgets.get(ctrl.kind)
                 if widget and widget.pollClick and widget.pollClick(ctrl, ctx) then
@@ -73,6 +80,8 @@ local function PollControls(S)
 
     -- Collapse show/hide after ipairs so a press-edge + latch cannot both apply.
     Collapse.Flush(S)
+    -- Tab rebuild is also deferred — never BuildContent under a still-down click.
+    Tabs.Flush(S)
 end
 
 function M.StartPoll(S)
@@ -166,6 +175,7 @@ end
 
 --- Re-apply panel fill/outline after Init. Rebuild content if the shell exists.
 function M.OnConfigChanged(S)
+    Tabs.Ensure(S)
     local colors = Theme.Of(S.config)
     if IsValid(S.panelBorder) then
         pcall(function()

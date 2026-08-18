@@ -28,6 +28,7 @@ function M.New()
         inputBackend = "ue4ss", -- "ue4ss" | "engine" (opt-in; no auto-detect)
         keyName = nil, -- Unreal FKey name for engine backend (e.g. "F7"); defaults from keyHint
         consoleCommand = nil, -- optional console command (toggle|open|close)
+        tabs = nil, -- optional string[] top-level tabs; omit = single scroll
     }
 end
 
@@ -47,6 +48,32 @@ function M.NormalizeInputBackend(value)
         return value
     end
     error('ModMenu.Init: inputBackend must be "ue4ss" or "engine"')
+end
+
+--- Unique non-empty names. false / {} / omit → nil (single-scroll menu).
+function M.NormalizeTabs(value)
+    if value == nil or value == false then
+        return nil
+    end
+    if type(value) ~= "table" then
+        error('ModMenu.Init: tabs must be an array of strings')
+    end
+    local out = {}
+    local seen = {}
+    for i, name in ipairs(value) do
+        if type(name) ~= "string" or name == "" then
+            error("ModMenu.Init: tabs[" .. tostring(i) .. "] must be a non-empty string")
+        end
+        if seen[name] then
+            error("ModMenu.Init: duplicate tab " .. name)
+        end
+        seen[name] = true
+        table.insert(out, name)
+    end
+    if #out == 0 then
+        return nil
+    end
+    return out
 end
 
 function M.ResolveEngineKeyName(config)
@@ -107,6 +134,9 @@ function M.ApplyInit(config, opts, ctx)
             error("ModMenu.Init: keyName must be a non-empty string")
         end
         config.keyName = opts.keyName
+    end
+    if opts.tabs ~= nil then
+        config.tabs = M.NormalizeTabs(opts.tabs)
     end
     if opts.consoleCommand ~= nil then
         if opts.consoleCommand == false or opts.consoleCommand == "" then

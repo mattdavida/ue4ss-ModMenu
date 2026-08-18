@@ -40,6 +40,7 @@
   Collapsible sections: Register({ collapsible = true, collapsed = true }).
   Nested fold: { type = "fold", id, label, collapsed = true, items = { ... } }.
   Theme (authors): Init({ theme = "light" | "dark" }) — light is the current look.
+  Tabs: Init({ tabs = { "Cheats", "Give" } }) + Register({ tab = "Cheats", ... }).
 
   Internals: core/ helpers + widgets/ registry (see README.md).
 ]]
@@ -52,6 +53,7 @@ local Instance = require("ModMenu.core.instance")
 local InputMode = require("ModMenu.core.inputmode")
 local Session = require("ModMenu.shell.session")
 local Dock = require("ModMenu.shell.dock")
+local Tabs = require("ModMenu.shell.tabs")
 local Lifecycle = require("ModMenu.shell.lifecycle")
 local Registry = require("ModMenu.shell.registry")
 
@@ -150,13 +152,18 @@ function ModMenu.Init(opts)
     Dock.ApplyPercentLayout(S.panelSlot, S.config)
     Dock.SyncChrome(S)
     Lifecycle.OnConfigChanged(S)
+    local tabList = "off"
+    if type(config.tabs) == "table" and #config.tabs > 0 then
+        tabList = table.concat(config.tabs, ",")
+    end
     Log(string.format(
-        "Init — title=%q key=%s backend=%s dock=%s theme=%s instance=%q serial=%s z=%d",
+        "Init — title=%q key=%s backend=%s dock=%s theme=%s tabs=%s instance=%q serial=%s z=%d",
         tostring(config.title),
         tostring(config.keyHint or config.key),
         tostring(config.inputBackend),
         tostring(config.dock),
         tostring(config.theme),
+        tabList,
         tostring(Instance.GetTag()),
         tostring(Instance.GetSerial()),
         Instance.GetViewportZ()
@@ -183,6 +190,23 @@ end
 ---@return string
 function ModMenu.GetDock()
     return config.dock
+end
+
+--- Switch the active tab (Init tabs). Session-only; rebuilds if the menu is open.
+---@param name string
+---@return boolean
+function ModMenu.SetTab(name)
+    return Tabs.Select(S, name)
+end
+
+--- Current tab name, or nil when Init did not set tabs.
+---@return string|nil
+function ModMenu.GetTab()
+    if not Tabs.Enabled(S) then
+        return nil
+    end
+    Tabs.Ensure(S)
+    return S.activeTab
 end
 
 --- Register or replace a mod section.

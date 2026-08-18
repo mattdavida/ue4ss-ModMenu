@@ -12,6 +12,7 @@ local Widgets = require("ModMenu.widgets.init")
 local Session = require("ModMenu.shell.session")
 local Dock = require("ModMenu.shell.dock")
 local Collapse = require("ModMenu.shell.collapse")
+local Tabs = require("ModMenu.shell.tabs")
 
 local Log = Util.Log
 local IsValid = Util.IsValid
@@ -70,6 +71,8 @@ function M.BuildContent(S)
         label = dockLbl,
     })
 
+    Tabs.BuildStrip(S, contentBox, suffix)
+
     AddSpacer(contentBox, "ModMenu_HeadPad_" .. suffix, 16)
 
     if #S.sections == 0 then
@@ -80,7 +83,22 @@ function M.BuildContent(S)
         return
     end
 
-    for sIndex, section in ipairs(S.sections) do
+    local visible = {}
+    for _, section in ipairs(S.sections) do
+        if Tabs.SectionVisible(S, section) then
+            table.insert(visible, section)
+        end
+    end
+
+    if #visible == 0 then
+        local emptyTab = Construct("/Script/UMG.TextBlock", contentBox, "ModMenu_EmptyTab_" .. suffix)
+        StyleText(emptyTab, config.fontHint)
+        SetLabelText(emptyTab, "No sections on this tab.")
+        contentBox:AddChildToVerticalBox(emptyTab)
+        return
+    end
+
+    for sIndex, section in ipairs(visible) do
         local collapsed = Collapse.IsCollapsed(S, section)
         local itemParent = contentBox
         if Collapse.IsCollapsible(section) then
@@ -122,7 +140,7 @@ function M.BuildContent(S)
             widget.build(ctx)
         end
 
-        if sIndex < #S.sections then
+        if sIndex < #visible then
             AddSpacer(contentBox, "ModMenu_Between_" .. section.id .. "_" .. suffix, 18)
         end
     end

@@ -10,6 +10,7 @@ local Widgets = require("ModMenu.widgets.init")
 local Session = require("ModMenu.shell.session")
 local Build = require("ModMenu.shell.build")
 local Collapse = require("ModMenu.shell.collapse")
+local Tabs = require("ModMenu.shell.tabs")
 
 local Log = Util.Log
 local IsValid = Util.IsValid
@@ -116,6 +117,7 @@ function M.Register(S, section)
         collapsible = section.collapsible == true,
         collapsed = section.collapsed == true,
         onToggle = section.onToggle,
+        tab = Tabs.ResolveSectionTab(S, section),
     }
 
     Collapse.Seed(S, copy)
@@ -129,6 +131,7 @@ function M.Register(S, section)
     end
 
     local existing = S.sectionIndexById[copy.id]
+    local oldTab = existing and S.sections[existing].tab
     if existing then
         S.sections[existing] = copy
         Log("Updated section: " .. copy.id)
@@ -138,7 +141,13 @@ function M.Register(S, section)
         Log("Registered section: " .. copy.id .. " (" .. tostring(#copy.items) .. " items)")
     end
 
-    RebuildIfOpen(S)
+    -- Hidden-tab Register must not rebuild the active tab's tree.
+    local needsUi = (not Tabs.Enabled(S))
+        or Tabs.SectionVisible(S, copy)
+        or (oldTab ~= nil and oldTab == S.activeTab)
+    if needsUi then
+        RebuildIfOpen(S)
+    end
 end
 
 function M.Get(S, sectionId, itemId)
@@ -310,6 +319,10 @@ function M.SetOptions(S, sectionId, itemId, options, selectedValue)
             tostring(itemId),
             #list
         ))
+        return true
+    end
+
+    if S.menuOpen and Tabs.Enabled(S) and not Tabs.SectionVisible(S, section) then
         return true
     end
 

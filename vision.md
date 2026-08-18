@@ -191,22 +191,17 @@ Goal: Silksong-like Quick Actions / tool banks.
 
 Goal: Silksong Cheats | Balance | Achievements style IA.
 
-### Design options (pick one in implementation)
+Shipped as option **A**: `Init({ tabs = { "Cheats", "Give" } })` + `Register({ tab = "Cheats", ... })`. Omit `tabs` = single scroll (existing hosts unchanged).
 
-- **A.** `Init({ tabs = { "Cheats", "Balance" } })` + `Register({ tab = "Cheats", ... })`
-- **B.** Parent groups: `RegisterGroup({ id, title })` then sections reference `group`
-
-Prefer **A** if tabs are primarily top-level navigation.
-
-- [ ] Tab strip chrome under title (active underline / accent — theme tokens)
-- [ ] Only build / show sections for active tab (or collapse others)
-- [ ] Remember last tab for the session
+- [x] Tab strip chrome under title / dock (active tab uses `buttonBgActive`)
+- [x] Only build sections for the active tab (rebuild on switch; do not hide a full tree)
+- [x] Remember last tab for the session
 - [ ] Keyboard optional later (Q/E or bumper-style) — not required for v1 tabs
 
 ### Verify
 
-- [ ] Host with 3 tabs × several sections feels like the Silksong reference
-- [ ] Register-while-open still rebuilds correctly
+- [x] Showcase host (`ModMenuHost`) with 3 tabs × several sections
+- [x] Register-while-open still rebuilds correctly (active tab only; hidden-tab Register skips rebuild)
 
 **Exit:** information architecture matches the north-star screenshot.
 
