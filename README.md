@@ -69,7 +69,7 @@ tools/
 
 `widgets/*.lua` are auto-bundled. New `core/` or `shell/` files still need a `MODULES` row in `tools/bundle.mjs`.
 
-UX / theming: see `vision.md`.
+UX / north star: `vision.md` (shipped; leftovers are optional).
 
 ---
 
@@ -700,7 +700,7 @@ ModMenu.Init({
 
 `textAccent` / `textStatus` remain for tabs/status. Button variants use their own `buttonBg*` / `buttonText*` tokens (Bootstrap-like primary/danger/warning).
 
-North-star look: `GithubAssets/ModMenuVision.png`. 2-column grids and hover/glow are still `vision.md` Phases 3–4 — constructed UMG is flat colors, not bevels.
+North-star look is the README hero shots (`ModMenuHero.png` / `ModMenuHero2.png`). Constructed UMG is flat colors, not bevels. 2-column grids and hover glow are optional leftovers in `vision.md`.
 
 Collapsible sections: `Register({ collapsible = true, collapsed = true })`. Nested groups: `{ type = "fold", id, label, items = { ... } }`. Tabs: `Init({ tabs = { "Cheats", "Give" } })` + `Register({ tab = "Cheats", ... })`.
 
@@ -749,7 +749,7 @@ A fuller dummy (tabs, every widget, log-only clicks) is `examples/ModMenuHost.lu
 ## See also
 
 - Install / Nexus zip: `npm run deploy` → `dist/ModMenu.zip`
-- UX / theming: `vision.md`
+- UX / north star: `vision.md`
 - Widget registry: `widgets/init.lua`
 - Public API facade: `ModMenu.lua`
 - Example game host (external): `MortalShell2Mod` (F6, Mortal Shell 2)
