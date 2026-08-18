@@ -171,7 +171,25 @@ function M.Flush(S)
     local source = S.pendingCollapseSource
     S.pendingCollapseId = nil
     S.pendingCollapseSource = nil
-    M.Apply(S, sectionId, source)
+    -- Do not SetVisibility inside LoopInGameThreadWithDelay. Opening a large
+    -- always-built body (Add, Give, …) hitches UMG on this EngineTick; UE4SS
+    -- then fails get_function_ref on a delayed callback and removes the hook.
+    table.insert(S.collapseApplyQueue, { id = sectionId, source = source })
+    if S.collapseApplyFn == nil then
+        S.collapseApplyFn = Util.PinFn(function()
+            S.collapseApplyScheduled = false
+            local queue = S.collapseApplyQueue
+            S.collapseApplyQueue = {}
+            for _, job in ipairs(queue) do
+                M.Apply(S, job.id, job.source)
+            end
+        end)
+    end
+    if S.collapseApplyScheduled then
+        return
+    end
+    S.collapseApplyScheduled = true
+    ExecuteInGameThreadWithDelay(1, S.collapseApplyFn)
 end
 
 local function AddHeaderText(row, name, text, fontSize, color, fill)

@@ -26,6 +26,7 @@ function M.BuildContent(S)
     if not IsValid(S.contentBox) then
         return
     end
+    S.contentDirty = false
 
     pcall(function()
         S.contentBox:ClearChildren()

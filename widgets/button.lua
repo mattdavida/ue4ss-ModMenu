@@ -2,6 +2,8 @@
   ModMenu widget: button
 ]]
 
+local Util = require("ModMenu.core.util")
+
 local Button = {}
 Button.type = "button"
 
@@ -45,9 +47,9 @@ local function FireClick(ctrl, ctx)
     ctx.ReclaimMenuInput()
     ctx.Input.IgnoreClicks(2)
     -- Reclaim touches PlayerController / SetInputMode — must stay on the game thread.
-    ExecuteInGameThreadWithDelay(200, function()
+    ExecuteInGameThreadWithDelay(200, Util.PinFn(function()
         ctx.ReclaimMenuInput()
-    end)
+    end))
     return true
 end
 

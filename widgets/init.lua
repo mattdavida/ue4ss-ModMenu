@@ -36,6 +36,7 @@ register(require("ModMenu.widgets.dropdown"))
 register(require("ModMenu.widgets.number"))
 register(require("ModMenu.widgets.textinput"))
 register(require("ModMenu.widgets.row"))
+register(require("ModMenu.widgets.fold"))
 
 local M = {}
 

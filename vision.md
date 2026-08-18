@@ -55,11 +55,11 @@ Reference feel: Silksong-style cheats UI — tabs, collapsible groups, checkbox 
 
 - [ ] Theme token system (colors, spacing) — colors mostly hardcoded
 - [ ] Light / dark presets
-- [x] Collapsible sections
+- [x] Collapsible sections + nested `fold` groups
 - [ ] Tabs / section groups
 - [ ] Button / checkbox visual polish (states, grids)
 - [ ] Close affordance in chrome (optional)
-- [x] Extra widget types (`number`, `textinput`, `row`; `slider` still open)
+- [x] Extra widget types (`number`, `textinput`, `row`, `fold`; `slider` still open)
 
 ---
 
@@ -134,6 +134,7 @@ Goal: biggest UX win for large cheat menus (Silksong-style groups).
 - [x] Persist collapse state for the session (per section id); optional later: disk persistence
 - [x] Rebuild children without breaking FName / zombie widget rules (`contentGen` discipline)
 - [x] Toggle via show/hide of a section body (dropdown pattern — no rebuild-under-click flicker)
+- [x] Nested `fold` widget inside a section (keybind categories, extra groups)
 
 ### Verify
 
@@ -219,6 +220,7 @@ Priority order:
 - [x] `number` (EditableTextBox + parse/clamp; stepper polish optional)
 - [x] `textinput` (EditableTextBox; poll GetText — do not reclaim on keystroke)
 - [x] `row` (HorizontalBox group for label/field/button on one line)
+- [x] `fold` (nested collapsible group inside a section)
 - [ ] `radio` or single-choice button group (if dropdown isn’t enough)
 - [ ] `button` grid already covered in Phase 4 — ensure docs show patterns
 
@@ -285,11 +287,11 @@ Goal: meaningful “finished” for the north-star journey.
 |-------|----------------------|--------|
 | 0     | Foundation docs      | Done (docs) |
 | 1     | Theme tokens         | Not started |
-| 2     | Collapsible sections | Done (code) |
+| 2     | Collapsible sections | Done (code; nested fold) |
 | 3     | Control polish       | Not started |
 | 4     | Layout density       | Not started |
 | 5     | Tabs / groups        | Not started |
-| 6     | New widget types     | Not started |
+| 6     | New widget types     | In progress (`fold` shipped; `slider` / `radio` open) |
 | 7     | Quality & showcase   | Not started |
 
 Update the table as phases complete (`Not started` → `In progress` → `Done`).

@@ -111,7 +111,7 @@ local function InstallEngine(opts)
         return
     end
 
-    enginePollHandle = LoopInGameThreadWithDelay(ENGINE_POLL_MS, function()
+    enginePollHandle = LoopInGameThreadWithDelay(ENGINE_POLL_MS, Util.PinFn(function()
         local pc = UEHelpers.GetPlayerController()
         if not IsValid(pc) then
             togglePrevDown = false
@@ -134,7 +134,7 @@ local function InstallEngine(opts)
         else
             lmbPrevDown = false
         end
-    end)
+    end))
 
     Log(string.format("input backend=engine poll %s + LMB (%dms)", tostring(opts.keyName), ENGINE_POLL_MS))
 end
