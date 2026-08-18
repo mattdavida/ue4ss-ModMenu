@@ -10,6 +10,7 @@ local Instance = require("ModMenu.core.instance")
 local Widgets = require("ModMenu.widgets.init")
 local Session = require("ModMenu.shell.session")
 local Dock = require("ModMenu.shell.dock")
+local Collapse = require("ModMenu.shell.collapse")
 local Build = require("ModMenu.shell.build")
 
 local Log = Util.Log
@@ -37,6 +38,8 @@ local function PollControls(S)
     for _, ctrl in ipairs(S.liveControls) do
         if ctrl.kind == "dock" then
             Dock.Poll(S, ctrl)
+        elseif ctrl.kind == "collapse" then
+            Collapse.Poll(S, ctrl)
         else
             local widget = Widgets.get(ctrl.kind)
             if widget and widget.poll then
@@ -45,23 +48,28 @@ local function PollControls(S)
         end
     end
 
-    if not Input.ConsumeMouseClick() then
-        return
-    end
-
-    -- List order. Dropdown.pollClick does option rows then header.
-    for _, ctrl in ipairs(S.liveControls) do
-        if ctrl.kind == "dock" then
-            if Dock.PollClick(S, ctrl) then
-                return
-            end
-        else
-            local widget = Widgets.get(ctrl.kind)
-            if widget and widget.pollClick and widget.pollClick(ctrl, ctx) then
-                return
+    if Input.ConsumeMouseClick() then
+        -- List order. Dropdown.pollClick does option rows then header.
+        for _, ctrl in ipairs(S.liveControls) do
+            if ctrl.kind == "dock" then
+                if Dock.PollClick(S, ctrl) then
+                    break
+                end
+            elseif ctrl.kind == "collapse" then
+                if Collapse.PollClick(S, ctrl) then
+                    break
+                end
+            else
+                local widget = Widgets.get(ctrl.kind)
+                if widget and widget.pollClick and widget.pollClick(ctrl, ctx) then
+                    break
+                end
             end
         end
     end
+
+    -- Collapse show/hide after ipairs so a press-edge + latch cannot both apply.
+    Collapse.Flush(S)
 end
 
 function M.StartPoll(S)

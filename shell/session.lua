@@ -26,6 +26,9 @@ function M.New(opts)
         pollHandle = nil,
         hooksInstalled = false,
         liveControls = {},
+        collapsedById = {}, ---@type table<string, boolean>
+        pendingCollapseId = nil, ---@type string|nil
+        pendingCollapseSource = nil, ---@type string|nil
         makeWidgetCtx = nil, ---@type fun(): table
     }
 end

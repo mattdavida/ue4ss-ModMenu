@@ -254,6 +254,25 @@ function M.WidgetHovered(widget)
     return ok and IsTruthy(hovered)
 end
 
+--- IsPressed, or HasMouseCapture when constructed UButtons lag the pressed flag.
+---@param widget any
+---@return boolean
+function M.WidgetIsDown(widget)
+    if widget == nil then
+        return false
+    end
+    local ok, pressed = pcall(function()
+        return widget:IsPressed()
+    end)
+    if ok and IsTruthy(pressed) then
+        return true
+    end
+    ok, pressed = pcall(function()
+        return widget:HasMouseCapture()
+    end)
+    return ok and IsTruthy(pressed)
+end
+
 --- Rising edge of UButton press. Do not gate on type()=="function": UE4SS UFunctions
 --- are userdata, so that check skipped IsPressed entirely (hover/press visuals still worked).
 ---@param state table
@@ -265,22 +284,7 @@ function M.WidgetPressedEdge(state, widget, flagKey)
     if state == nil or widget == nil then
         return false
     end
-    local down = false
-    local ok, pressed = pcall(function()
-        return widget:IsPressed()
-    end)
-    if ok and IsTruthy(pressed) then
-        down = true
-    end
-    if not down then
-        -- Constructed UButtons often report IsPressed=false while Slate still captures.
-        ok, pressed = pcall(function()
-            return widget:HasMouseCapture()
-        end)
-        if ok and IsTruthy(pressed) then
-            down = true
-        end
-    end
+    local down = M.WidgetIsDown(widget)
     local wentDown = down and not state[flagKey]
     state[flagKey] = down
     return wentDown

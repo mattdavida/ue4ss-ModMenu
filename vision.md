@@ -55,7 +55,7 @@ Reference feel: Silksong-style cheats UI — tabs, collapsible groups, checkbox 
 
 - [ ] Theme token system (colors, spacing) — colors mostly hardcoded
 - [ ] Light / dark presets
-- [ ] Collapsible sections
+- [x] Collapsible sections
 - [ ] Tabs / section groups
 - [ ] Button / checkbox visual polish (states, grids)
 - [ ] Close affordance in chrome (optional)
@@ -126,13 +126,14 @@ Goal: biggest UX win for large cheat menus (Silksong-style groups).
 
 ### Design
 
-- [ ] `Register` section fields:
-  - [ ] `collapsible` (default `true` or `false` — decide & document)
-  - [ ] `collapsed` initial state
-  - [ ] optional `onToggle(collapsed)` callback
-- [ ] Section header row: title + ▶ / ▼ (or equivalent) as a button / click target
-- [ ] Persist collapse state for the session (per section id); optional later: shared-var persistence across open/close
-- [ ] Rebuild or show/hide children without breaking FName / zombie widget rules (`contentGen` discipline)
+- [x] `Register` section fields:
+  - [x] `collapsible` (default `false` — existing sections stay always-open)
+  - [x] `collapsed` initial state (requires `collapsible`)
+  - [x] optional `onToggle(collapsed)` callback
+- [x] Section header row: title left, `+` / `-` right (accordion) as a full-width click target
+- [x] Persist collapse state for the session (per section id); optional later: disk persistence
+- [x] Rebuild children without breaking FName / zombie widget rules (`contentGen` discipline)
+- [x] Toggle via show/hide of a section body (dropdown pattern — no rebuild-under-click flicker)
 
 ### Verify
 
@@ -284,7 +285,7 @@ Goal: meaningful “finished” for the north-star journey.
 |-------|----------------------|--------|
 | 0     | Foundation docs      | Done (docs) |
 | 1     | Theme tokens         | Not started |
-| 2     | Collapsible sections | Not started |
+| 2     | Collapsible sections | Done (code) |
 | 3     | Control polish       | Not started |
 | 4     | Layout density       | Not started |
 | 5     | Tabs / groups        | Not started |

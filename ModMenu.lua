@@ -37,6 +37,7 @@
   never collide on ModMenu_Root_1 under the same GameInstance.
 
   Dock presets: Left / Right via header button (session only; no free drag).
+  Collapsible sections: Register({ collapsible = true, collapsed = true }).
 
   Internals: core/ helpers + widgets/ registry (see README.md).
 ]]

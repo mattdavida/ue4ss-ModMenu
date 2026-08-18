@@ -9,6 +9,7 @@ local Options = require("ModMenu.core.options")
 local Widgets = require("ModMenu.widgets.init")
 local Session = require("ModMenu.shell.session")
 local Build = require("ModMenu.shell.build")
+local Collapse = require("ModMenu.shell.collapse")
 
 local Log = Util.Log
 local IsValid = Util.IsValid
@@ -62,6 +63,7 @@ local function ValidateSection(section)
     if type(section.items) ~= "table" then
         error("Register(" .. tostring(section.id) .. ") requires .items array")
     end
+    Collapse.Validate(section)
     for i, item in ipairs(section.items) do
         ValidateItem(item, section.id, i)
     end
@@ -106,7 +108,12 @@ function M.Register(S, section)
         id = section.id,
         title = section.title or section.id,
         items = section.items,
+        collapsible = section.collapsible == true,
+        collapsed = section.collapsed == true,
+        onToggle = section.onToggle,
     }
+
+    Collapse.Seed(S, copy)
 
     -- Seed defaults into values store.
     for _, item in ipairs(copy.items) do

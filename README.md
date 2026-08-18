@@ -56,7 +56,7 @@ Development uses the multi-file tree (what you edit in this repo):
 ```
 ModMenu.lua                 ← public API facade
 core/                       ← util, umg, shared, config, instance, inputmode, input, options
-shell/                      ← session, dock, build, lifecycle, registry
+shell/                      ← session, dock, collapse, build, lifecycle, registry
 widgets/                    ← one module per item type + registry
 tools/
   bundle.mjs                ← npm run bundle
@@ -233,8 +233,25 @@ Add or **replace** a section by `section.id`. If the menu is open, content rebui
 {
   id = "UniqueId",       -- required
   title = "Display",     -- optional; defaults to id
+  collapsible = false,   -- optional; accordion header (title left, + / - right)
+  collapsed = false,     -- optional; start closed (requires collapsible = true)
+  -- onToggle = function(collapsed) end,  -- optional
   items = { ... },       -- required array
 }
+```
+
+Default is **not** collapsible — existing sections stay always-open. Session remembers open/closed per `id` (re-Register does not reset it; not saved to disk).
+
+```lua
+ModMenu.Register({
+    id = "Keybinds",
+    title = "Keybinds",
+    collapsible = true,
+    collapsed = true, -- start hidden
+    items = {
+        { type = "label", label = "Set a key per action. Hidden until you open this section." },
+    },
+})
 ```
 
 ### Values
@@ -554,11 +571,12 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 3. **Input** — while open, uses GameAndUI + mouse cursor. Buttons / dock / dropdowns fire from `UButton:IsPressed()` (rising edge, 16ms poll) plus the LMB latch + `IsHovered()` fallback. Checkboxes poll persistent `IsChecked()` and do not need either. The toggle key uses `Init inputBackend`: `ue4ss` (`RegisterKeyBind`) or `engine` (poll `IsInputKeyDown`). PlayerController often does **not** see LMB while Slate owns the mouse, so engine-backend menus must not rely on the LMB latch alone. Closing one menu does not force GameOnly while another ModMenu is still open (`ModMenu.OpenCount`). `ClientRestart` / `DestroyShell` do not touch input unless this instance had the menu open. On close, `GameOnly` is applied only if the game had no cursor when we opened (mouse-look); hub/inventory cursors are left alone. Camera look is **not** locked unless `Init({ ignoreLook = true })`.
 4. **Dock** — left/right presets only (header button + `SetDock`). No free drag. Session only (not saved to disk).
 5. **Scroll** — the docked panel is a fixed viewport; section content lives in a ScrollBox (mouse wheel). Use `labelWidth` on `number` / `textinput` so amount rows line up like a table.
-6. **FNames** — shell names include `instanceId`; content rebuilds bump an internal generation after `ClearChildren`. Prefer `SetOptions` on searchable lists over constant full rebuilds.
+6. **FNames** — shell names include `instanceId`; content rebuilds bump an internal generation after `ClearChildren`. Collapse expand/collapse show/hides the section body and does not rebuild. Prefer `SetOptions` on searchable lists over constant full rebuilds.
 7. **Large lists** — keep `maxVisible` bounded; filter narrows the working set. Building thousands of UButtons at once is risky.
 8. **Game readiness** — many game objects only exist after a save is loaded; surface that in a status `label` and/or `OnOpen` retry.
 9. **Callbacks** — errors inside `onClick` / `onChange` are caught and logged as `[ModMenu] callback error: ...`.
 10. **Hot-reload** — `ModRef` shared vars (`NextInstanceId`, key claims, open count) are **not** cleared on Ctrl+R.
+11. **Collapse** — opt-in (`collapsible = true`). Accordion header: title on the left, `+` (closed) / `-` (open) on the right. Toggle show/hides the section body (same as dropdowns; no content rebuild). Session-only per section `id` (survives close/open; not written to disk). Re-Register keeps the current open/closed state.
 
 ### Known limits
 
@@ -570,7 +588,7 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 
 ## Theming & polish
 
-Visual tokens, collapse, and tabs are planned in `vision.md`. Hosts keep the same `Init` / `Register` API while those land.
+Collapsible sections: `Register({ collapsible = true, collapsed = true })`. Visual tokens and tabs are planned in `vision.md`.
 
 ---
 

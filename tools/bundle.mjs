@@ -83,6 +83,7 @@ const MODULES = [
   ...discoverWidgetModules(),
   ["ModMenu.shell.session", "shell/session.lua"],
   ["ModMenu.shell.dock", "shell/dock.lua"],
+  ["ModMenu.shell.collapse", "shell/collapse.lua"],
   ["ModMenu.shell.build", "shell/build.lua"],
   ["ModMenu.shell.lifecycle", "shell/lifecycle.lua"],
   ["ModMenu.shell.registry", "shell/registry.lua"],
