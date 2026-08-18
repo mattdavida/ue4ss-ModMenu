@@ -32,6 +32,11 @@ function M.New(opts)
         contentDirty = false, --- rebuild on next Open after Register/SetOptions while closed
         collapsedById = {}, ---@type table<string, boolean>
         foldCollapsedByKey = {}, ---@type table<string, boolean> "sectionId.foldId"
+        activeTab = nil, ---@type string|nil session-only; first Init tab when unset
+        pendingTabId = nil, ---@type string|nil
+        tabApplyQueue = {}, ---@type string[]
+        tabApplyFn = nil, ---@type function|nil
+        tabApplyScheduled = false,
         pendingCollapseId = nil, ---@type string|nil
         pendingCollapseSource = nil, ---@type string|nil
         collapseApplyQueue = {}, ---@type { id: string, source: string|nil }[]

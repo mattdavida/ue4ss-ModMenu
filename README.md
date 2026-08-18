@@ -2,15 +2,19 @@
 
 ModMenu is a lightweight UI framework for UE4SS Lua mods that lets feature modules register reusable in-game settings panels without each mod reimplementing its own ImGui or UMG shell.
 
-![Two ModMenu panels — Dev Tools (F6, left) and TestMod (F7, right)](GithubAssets/ModMenuHero.png)
+![ModMenu Host (F8, left, Cheats tab) and Mortal Shell 2 (F6, right) — two independent shells](GithubAssets/ModMenuHero.png)
 
-*Beast of Reincarnation: `DevToolsMasterMod` (F6, left) and `TestMod` (F7, right) — two independent ModMenu shells in one session.*
+*Mortal Shell 2: `ModMenuHost` (F8, left) and `MortalShell2Mod` (F6, right). Dummy Cheats tab (widgets, button variants) beside a real Give list — two shells, two keys, one session.*
 
 Each **enabled Lua mod** that calls `Init` gets its own panel + hotkey. Feature modules **register sections** into that mod’s shell.
 
 UObject names are unique across mods via `ModRef` shared vars (see `instanceId`), so two mods can both ship a ModMenu without stealing `ModMenu_Root_1`.
 
-Example hosts (not in this repo — live under a game’s `ue4ss/Mods/`): `DevToolsMasterMod` (F6), `TestMod` (F7).
+![ModMenu Host Give tab (left) and Mortal Shell 2 Unlocks (right)](GithubAssets/ModMenuHero2.png)
+
+*Same session, different pages: Host on **Give** (search, amount row, warning action) while the cheat menu has **Unlocks** open. Tabs and collapse are per-shell.*
+
+Showcase dummy: `examples/ModMenuHost.lua` (copy into `ue4ss/Mods/YourMod/Scripts/main.lua`). Game-side example: `MortalShell2Mod` (not in this repo).
 
 ---
 
@@ -56,7 +60,7 @@ Development uses the multi-file tree (what you edit in this repo):
 ```
 ModMenu.lua                 ← public API facade
 core/                       ← util, theme, umg, shared, config, instance, inputmode, input, options
-shell/                      ← session, dock, collapse, build, lifecycle, registry
+shell/                      ← session, dock, collapse, tabs, build, lifecycle, registry
 widgets/                    ← one module per item type + registry
 tools/
   bundle.mjs                ← npm run bundle
@@ -87,6 +91,7 @@ ModMenu.Init({
     keyHint = "F6",
     dock = "left", -- "left" | "right"
     -- theme = "dark", -- charcoal panel; omit for the current ("light") look
+    -- tabs = { "Cheats", "Give", "Keybinds" }, -- omit = single scroll
     -- inputBackend = "engine", -- opt-in when RegisterKeyBind does not fire
     -- consoleCommand = "modmenu",
 })
@@ -189,6 +194,7 @@ Configure and bind this mod’s shell. Safe to call more than once (updates conf
 | `fontTitle` / `fontHint` / `fontItem` / `fontSection` / `fontDropdown` | 22 / 14 / 16 / 18 / 15 | Optional. Compact defaults (scale up per-game if needed). `fontDropdown` is header + option rows; match `fontItem` to size dropdowns like buttons. |
 | `theme` | `"light"` | Author preset. `"light"` is the current look (navy panel, light fields). `"dark"` is charcoal panel, dark fields, teal/gold tokens. Not a player setting. |
 | `colors` | from `theme` | Optional overrides: `{ panelBg = { R, G, B, A }, ... }`. Merged onto the preset. See **Theming**. |
+| `tabs` | `nil` | Optional `{ "Cheats", "Give", ... }`. Adds a tab strip; only the active tab's sections are built. Omit = current single-scroll menu. Duplicate / empty names error. |
 | `canOpen` | `nil` | Optional `function(): boolean` or `false, "reason"`. Gates **open** (key toggle + `ModMenu.Open`); close is never gated. Pass `false` on a later `Init` to clear. |
 | `ignoreLook` | `false` | Opt-in. While open, `SetIgnoreLookInput(true)` so mouse-look games do not spin the camera. Default off — hosts that need a locked camera must pass `true`. |
 
@@ -236,6 +242,7 @@ Add or **replace** a section by `section.id`. If the menu is open, content rebui
 {
   id = "UniqueId",       -- required
   title = "Display",     -- optional; defaults to id
+  tab = "Cheats",        -- optional; requires Init({ tabs = { ... } }); omit = first tab
   collapsible = false,   -- optional; accordion header (title left, + / - right)
   collapsed = false,     -- optional; start closed (requires collapsible = true)
   -- onToggle = function(collapsed) end,  -- optional
@@ -244,6 +251,22 @@ Add or **replace** a section by `section.id`. If the menu is open, content rebui
 ```
 
 Default is **not** collapsible — existing sections stay always-open. Session remembers open/closed per `id` (re-Register does not reset it; not saved to disk). Nest groups **inside** a section with `type = "fold"` (see **Item types**).
+
+Omit `Init tabs` and the menu stays a single scroll (Mortal Shell 2 and other hosts unchanged). With tabs, only the **active** tab's sections are built — switching rebuilds content (values from `Get` / `Set` still live for hidden tabs). Last tab is session-only (survives close/open; not written to disk).
+
+```lua
+ModMenu.Init({
+    title = "My Cheats",
+    tabs = { "Cheats", "Give", "Keybinds" },
+})
+
+ModMenu.Register({
+    id = "Combat",
+    title = "Combat",
+    tab = "Cheats",
+    items = { ... },
+})
+```
 
 ```lua
 ModMenu.Register({
@@ -310,6 +333,8 @@ ModMenu.IsOpen()           -- boolean
 ModMenu.ListSections()     -- { "MaxRank", "Items", ... }
 ModMenu.SetDock("left")
 ModMenu.GetDock()
+ModMenu.SetTab("Give")     -- requires Init({ tabs = ... })
+ModMenu.GetTab()           -- nil when tabs are off
 ```
 
 `OnOpen` runs each time the menu finishes opening (after the shell is visible). Register as many callbacks as you need (e.g. one per feature).
@@ -360,7 +385,7 @@ Dropdown also exposes helpers used by the registry (`refreshLive`, `collapseAll`
 
 `widgets/*.lua` are auto-bundled — do not add a `MODULES` row for a new widget. New `core/` or `shell/` files still need one.
 
-Natural follow-ons (not required for hosts): tabbed sections, `slider` / stepper polish — same contract as above.
+Natural follow-ons (not required for hosts): `slider` / stepper polish — same contract as above.
 
 ---
 
@@ -644,6 +669,7 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 9. **Callbacks** — errors inside `onClick` / `onChange` are caught and logged as `[ModMenu] callback error: ...`.
 10. **Hot-reload** — `ModRef` shared vars (`NextInstanceId`, key claims, open count) are **not** cleared on Ctrl+R.
 11. **Collapse** — opt-in (`collapsible = true`). Accordion header: title on the left, `+` (closed) / `-` (open) on the right. Toggle show/hides the section body (same as dropdowns; no content rebuild). Session-only per section `id` (survives close/open; not written to disk). Re-Register keeps the current open/closed state. Nested groups use `type = "fold"` inside `items` — same session memory per `sectionId.foldId` (see **Item types**).
+12. **Tabs** — opt-in (`Init({ tabs = { ... } })`). Strip under title / dock. Only the active tab's sections are constructed; switching rebuilds that body (not a hidden full tree). `Register({ tab = "Give" })`; omit `tab` = first name. `Get` / `Set` still work for hidden tabs. Session remembers the last tab (not disk). Keyboard Q/E is not in v1.
 
 ### Known limits
 
@@ -674,9 +700,9 @@ ModMenu.Init({
 
 `textAccent` / `textStatus` remain for tabs/status. Button variants use their own `buttonBg*` / `buttonText*` tokens (Bootstrap-like primary/danger/warning).
 
-North-star look: `GithubAssets/ModMenuVision.png`. Tabs, 2-column grids, and hover/glow are still `vision.md` Phases 3–5 — constructed UMG is flat colors, not bevels.
+North-star look: `GithubAssets/ModMenuVision.png`. 2-column grids and hover/glow are still `vision.md` Phases 3–4 — constructed UMG is flat colors, not bevels.
 
-Collapsible sections: `Register({ collapsible = true, collapsed = true })`. Nested groups: `{ type = "fold", id, label, items = { ... } }`.
+Collapsible sections: `Register({ collapsible = true, collapsed = true })`. Nested groups: `{ type = "fold", id, label, items = { ... } }`. Tabs: `Init({ tabs = { "Cheats", "Give" } })` + `Register({ tab = "Cheats", ... })`.
 
 ---
 
@@ -714,6 +740,10 @@ ModMenu.Register({
 
 Ship `MyCheatMenu/` plus ModMenu from `npm run deploy` (`dist/ModMenu.zip` → extract into `ue4ss/Mods/`). See **Install** above.
 
+A fuller dummy (tabs, every widget, log-only clicks) is `examples/ModMenuHost.lua`. Copy it to `ue4ss/Mods/YourMod/Scripts/main.lua` with an empty `enabled.txt`. Use a different toggle key than any other menu in the same session.
+
+A fuller dummy (tabs, every widget, log-only clicks) is `examples/ModMenuHost.lua`. Copy it to `ue4ss/Mods/YourMod/Scripts/main.lua` with an empty `enabled.txt`. Use a different toggle key than any other menu in the same session.
+
 ---
 
 ## See also
@@ -722,4 +752,5 @@ Ship `MyCheatMenu/` plus ModMenu from `npm run deploy` (`dist/ModMenu.zip` → e
 - UX / theming: `vision.md`
 - Widget registry: `widgets/init.lua`
 - Public API facade: `ModMenu.lua`
-- Example game hosts (external): `DevToolsMasterMod` (multi-section), `TestMod` (minimal + key-conflict smoke flag)
+- Example game host (external): `MortalShell2Mod` (F6, Mortal Shell 2)
+- Showcase dummy: `examples/ModMenuHost.lua` (F8 — tabs, widgets, console logs)
