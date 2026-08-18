@@ -742,8 +742,6 @@ Ship `MyCheatMenu/` plus ModMenu from `npm run deploy` (`dist/ModMenu.zip` → e
 
 A fuller dummy (tabs, every widget, log-only clicks) is `examples/ModMenuHost.lua`. Copy it to `ue4ss/Mods/YourMod/Scripts/main.lua` with an empty `enabled.txt`. Use a different toggle key than any other menu in the same session.
 
-A fuller dummy (tabs, every widget, log-only clicks) is `examples/ModMenuHost.lua`. Copy it to `ue4ss/Mods/YourMod/Scripts/main.lua` with an empty `enabled.txt`. Use a different toggle key than any other menu in the same session.
-
 ---
 
 ## See also
