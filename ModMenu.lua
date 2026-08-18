@@ -39,6 +39,7 @@
   Dock presets: Left / Right via header button (session only; no free drag).
   Collapsible sections: Register({ collapsible = true, collapsed = true }).
   Nested fold: { type = "fold", id, label, collapsed = true, items = { ... } }.
+  Theme (authors): Init({ theme = "light" | "dark" }) — light is the current look.
 
   Internals: core/ helpers + widgets/ registry (see README.md).
 ]]
@@ -141,19 +142,21 @@ end
 function ModMenu.Init(opts)
     Config.ApplyInit(config, opts, { instanceUnlocked = Instance.GetTag() == nil })
     Instance.Ensure(config)
-    Umg.SetDefaults({ fontItem = config.fontItem })
+    Umg.SetDefaults({ fontItem = config.fontItem, colors = config.colors })
     Lifecycle.InstallHooks(S)
     InstallInput()
     initialized = true
     -- Re-apply dock if shell already exists (Init can be called again).
     Dock.ApplyPercentLayout(S.panelSlot, S.config)
     Dock.SyncChrome(S)
+    Lifecycle.OnConfigChanged(S)
     Log(string.format(
-        "Init — title=%q key=%s backend=%s dock=%s instance=%q serial=%s z=%d",
+        "Init — title=%q key=%s backend=%s dock=%s theme=%s instance=%q serial=%s z=%d",
         tostring(config.title),
         tostring(config.keyHint or config.key),
         tostring(config.inputBackend),
         tostring(config.dock),
+        tostring(config.theme),
         tostring(Instance.GetTag()),
         tostring(Instance.GetSerial()),
         Instance.GetViewportZ()
@@ -216,13 +219,31 @@ function ModMenu.SetButtonLabel(sectionId, itemId, text)
     return Registry.SetButtonLabel(S, sectionId, itemId, text)
 end
 
---- Enable/disable a button (blocks poll clicks + UMG SetIsEnabled when live).
+--- Enable/disable a button (blocks poll clicks + themed disabled chrome).
 ---@param sectionId string
 ---@param itemId string
 ---@param enabled boolean
 ---@return boolean
 function ModMenu.SetButtonEnabled(sectionId, itemId, enabled)
     return Registry.SetButtonEnabled(S, sectionId, itemId, enabled)
+end
+
+--- Button semantic color (Bootstrap-like): default|primary|secondary|success|danger|warning|info.
+---@param sectionId string
+---@param itemId string
+---@param variant string
+---@return boolean
+function ModMenu.SetButtonVariant(sectionId, itemId, variant)
+    return Registry.SetButtonVariant(S, sectionId, itemId, variant)
+end
+
+--- Button selected/on chrome (green). Disabled still wins over active.
+---@param sectionId string
+---@param itemId string
+---@param active boolean
+---@return boolean
+function ModMenu.SetButtonActive(sectionId, itemId, active)
+    return Registry.SetButtonActive(S, sectionId, itemId, active)
 end
 
 --- Set a value and sync a live checkbox/dropdown/number/textinput if present.

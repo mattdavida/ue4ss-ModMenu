@@ -1,11 +1,96 @@
 --[[
   ModMenu widget: button
+
+  Visual layers (disabled wins, then active, then variant):
+    enabled = false  → themed disabled chrome + no clicks
+    active = true    → "this is on" (green) — not a variant
+    variant          → Bootstrap-like intent (primary/danger/warning/…)
+    default          → theme buttonBg
 ]]
 
 local Util = require("ModMenu.core.util")
+local Theme = require("ModMenu.core.theme")
 
 local Button = {}
 Button.type = "button"
+
+local VARIANTS = {
+    default = true,
+    primary = true,
+    secondary = true,
+    success = true,
+    danger = true,
+    warning = true,
+    info = true,
+}
+
+-- Short-lived names from the first variant pass.
+local ALIASES = {
+    accent = "primary",
+}
+
+local VARIANT_CHROME = {
+    primary = { "buttonBgPrimary", "buttonTextPrimary" },
+    secondary = { "buttonBgSecondary", "buttonTextSecondary" },
+    success = { "buttonBgSuccess", "buttonTextSuccess" },
+    danger = { "buttonBgDanger", "buttonTextDanger" },
+    warning = { "buttonBgWarning", "buttonTextWarning" },
+    info = { "buttonBgInfo", "buttonTextInfo" },
+}
+
+local VARIANT_HELP = "default|primary|secondary|success|danger|warning|info"
+
+function Button.NormalizeVariant(value)
+    if value == nil or value == "" then
+        return "default"
+    end
+    if type(value) ~= "string" then
+        return nil
+    end
+    value = ALIASES[value] or value
+    if VARIANTS[value] then
+        return value
+    end
+    return nil
+end
+
+local function ChromeColors(colors, item)
+    colors = colors or {}
+    local fallbackBg, fallbackFg = colors.buttonBg, colors.buttonText
+    if item.enabled == false then
+        return colors.buttonBgDisabled or fallbackBg, colors.buttonTextDisabled or fallbackFg
+    end
+    if item.active == true then
+        return colors.buttonBgActive or fallbackBg, colors.buttonTextActive or fallbackFg
+    end
+    local variant = item.variant or "default"
+    local keys = VARIANT_CHROME[variant]
+    if keys then
+        return colors[keys[1]] or fallbackBg, colors[keys[2]] or fallbackFg
+    end
+    return fallbackBg, fallbackFg
+end
+
+--- Paint UMG from item.enabled / item.active / item.variant.
+function Button.applyChrome(ctrl, ctx)
+    if ctrl == nil or ctrl.item == nil then
+        return
+    end
+    local item = ctrl.item
+    local enabled = item.enabled ~= false
+    ctrl.enabled = enabled
+    local colors = Theme.Of(ctx and ctx.config)
+    local bg, fg = ChromeColors(colors, item)
+    pcall(function()
+        if ctrl.widget ~= nil then
+            ctrl.widget:SetIsEnabled(enabled)
+            ctrl.widget:SetBackgroundColor(bg)
+        end
+    end)
+    if ctrl.labelWidget ~= nil and ctx ~= nil and ctx.umg ~= nil then
+        ctx.umg.StyleText(ctrl.labelWidget, ctx.config.fontItem, fg)
+    end
+end
 
 function Button.validate(item, sectionId, index)
     local prefix = string.format("Register(%s) items[%d]", tostring(sectionId), index)
@@ -18,26 +103,35 @@ function Button.validate(item, sectionId, index)
     if item.onClick ~= nil and type(item.onClick) ~= "function" then
         error(prefix .. " onClick must be a function")
     end
+    if item.enabled ~= nil and type(item.enabled) ~= "boolean" then
+        error(prefix .. " enabled must be a boolean")
+    end
+    if item.active ~= nil and type(item.active) ~= "boolean" then
+        error(prefix .. " active must be a boolean")
+    end
+    if item.variant ~= nil and Button.NormalizeVariant(item.variant) == nil then
+        error(prefix .. " variant must be " .. VARIANT_HELP)
+    end
 end
 
 function Button.build(ctx)
     local umg = ctx.umg
-    local button, label = umg.CreateTextButton(ctx.contentBox, ctx.namePrefix, ctx.item.label)
+    local item = ctx.item
+    item.variant = Button.NormalizeVariant(item.variant) or "default"
+    local button, label = umg.CreateTextButton(ctx.contentBox, ctx.namePrefix, item.label)
     umg.AddToContent(ctx, button)
     umg.AddItemPad(ctx, ctx.namePrefix .. "_Pad", 8)
-    local enabled = ctx.item.enabled ~= false
-    pcall(function()
-        button:SetIsEnabled(enabled)
-    end)
-    table.insert(ctx.liveControls, {
+    local ctrl = {
         kind = "button",
         sectionId = ctx.section.id,
-        item = ctx.item,
+        item = item,
         widget = button,
         labelWidget = label,
-        enabled = enabled,
+        enabled = item.enabled ~= false,
         wasPressed = false,
-    })
+    }
+    Button.applyChrome(ctrl, ctx)
+    table.insert(ctx.liveControls, ctrl)
 end
 
 --- Fire onClick. Shared by IsPressed poll and LMB-latch pollClick.

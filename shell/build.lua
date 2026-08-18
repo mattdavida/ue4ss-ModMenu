@@ -5,6 +5,7 @@
 local UEHelpers = require("UEHelpers.UEHelpers")
 local Util = require("ModMenu.core.util")
 local Umg = require("ModMenu.core.umg")
+local Theme = require("ModMenu.core.theme")
 local Instance = require("ModMenu.core.instance")
 local InputMode = require("ModMenu.core.inputmode")
 local Widgets = require("ModMenu.widgets.init")
@@ -139,6 +140,8 @@ function M.Teardown(S)
     S.menuRoot = nil
     S.contentBox = nil
     S.panelSlot = nil
+    S.panelBorder = nil
+    S.panelOutline = nil
     Session.ClearLive(S)
     S.menuOpen = false
 end
@@ -179,14 +182,23 @@ function M.Create(S)
     local canvas = Construct("/Script/UMG.CanvasPanel", tree, "ModMenu_Canvas_" .. suffix)
     tree.RootWidget = canvas
 
-    local border = Construct("/Script/UMG.Border", canvas, "ModMenu_Border_" .. suffix)
+    local colors = Theme.Of(config)
+    local fill = Construct("/Script/UMG.Border", canvas, "ModMenu_Border_" .. suffix)
     pcall(function()
-        border:SetBrushColor({ R = 0.05, G = 0.07, B = 0.12, A = 0.92 })
-        border:SetPadding({ Left = 20, Top = 18, Right = 20, Bottom = 18 })
+        fill:SetBrushColor(colors.panelBg)
+        fill:SetPadding(Theme.PadPanel(config))
+    end)
+
+    -- Always wrap in a 1px outline. Light uses panelBg so the edge is invisible.
+    local outline = Construct("/Script/UMG.Border", canvas, "ModMenu_Outline_" .. suffix)
+    pcall(function()
+        outline:SetBrushColor(colors.panelBorder)
+        outline:SetPadding({ Left = 1, Top = 1, Right = 1, Bottom = 1 })
+        outline:SetContent(fill)
     end)
 
     -- ScrollBox fills the docked panel so long section lists are reachable.
-    local scroll = Construct("/Script/UMG.ScrollBox", border, "ModMenu_Scroll_" .. suffix)
+    local scroll = Construct("/Script/UMG.ScrollBox", fill, "ModMenu_Scroll_" .. suffix)
     pcall(function()
         scroll:SetAnimateWheelScrolling(true)
         scroll:SetAlwaysShowScrollbar(true)
@@ -198,15 +210,17 @@ function M.Create(S)
             scroll:SetScrollbarThickness({ X = 8, Y = 8 })
         end
     end)
-    border:SetContent(scroll)
+    fill:SetContent(scroll)
 
     local vbox = Construct("/Script/UMG.VerticalBox", scroll, "ModMenu_VBox_" .. suffix)
     pcall(function()
         scroll:AddChild(vbox)
     end)
 
-    local slot = canvas:AddChildToCanvas(border)
+    local slot = canvas:AddChildToCanvas(outline)
     S.panelSlot = slot
+    S.panelBorder = fill
+    S.panelOutline = outline
     if slot then
         Dock.ApplyPercentLayout(slot, config)
     end
