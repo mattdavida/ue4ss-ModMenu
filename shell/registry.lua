@@ -13,6 +13,7 @@ local Collapse = require("ModMenu.shell.collapse")
 local Tabs = require("ModMenu.shell.tabs")
 
 local Log = Util.Log
+local Debug = Util.Debug
 local IsValid = Util.IsValid
 local ToPlainString = Util.ToPlainString
 local ValueKey = Util.ValueKey
@@ -134,11 +135,11 @@ function M.Register(S, section)
     local oldTab = existing and S.sections[existing].tab
     if existing then
         S.sections[existing] = copy
-        Log("Updated section: " .. copy.id)
+        Debug("Updated section: " .. copy.id)
     else
         table.insert(S.sections, copy)
         S.sectionIndexById[copy.id] = #S.sections
-        Log("Registered section: " .. copy.id .. " (" .. tostring(#copy.items) .. " items)")
+        Debug("Registered section: " .. copy.id .. " (" .. tostring(#copy.items) .. " items)")
     end
 
     -- Hidden-tab Register must not rebuild the active tab's tree.
@@ -313,7 +314,7 @@ function M.SetOptions(S, sectionId, itemId, options, selectedValue)
 
     if live and live.searchable and live.listBox ~= nil then
         Dropdown.refreshLive(live, list, selectedValue, S.values, vkey)
-        Log(string.format(
+        Debug(string.format(
             "SetOptions(%s.%s) refreshed searchable list (%d options)",
             tostring(sectionId),
             tostring(itemId),
@@ -339,7 +340,7 @@ function M.SetOptions(S, sectionId, itemId, options, selectedValue)
                 Log("SetOptions rebuild failed: " .. tostring(err))
                 Session.EnsureVisible(S)
             else
-                Log(string.format(
+                Debug(string.format(
                     "SetOptions(%s.%s) rebuilt UI with %d options",
                     tostring(sectionId),
                     tostring(itemId),

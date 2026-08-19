@@ -29,6 +29,7 @@ function M.New()
         keyName = nil, -- Unreal FKey name for engine backend (e.g. "F7"); defaults from keyHint
         consoleCommand = nil, -- optional console command (toggle|open|close)
         tabs = nil, -- optional string[] top-level tabs; omit = single scroll
+        debug = false, -- verbose [ModMenu] traces (collapse, open/close, register)
     }
 end
 
@@ -150,6 +151,9 @@ function M.ApplyInit(config, opts, ctx)
     -- Human-readable FName tag (Live View). Locked after first EnsureInstanceIdentity.
     if opts.instanceId ~= nil and ctx.instanceUnlocked then
         config.instanceId = opts.instanceId
+    end
+    if opts.debug ~= nil then
+        config.debug = opts.debug == true
     end
 
     if config.key == nil then

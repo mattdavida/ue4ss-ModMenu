@@ -18,8 +18,21 @@ function M.PinFn(fn)
     return fn
 end
 
+local debugOn = false
+
+function M.SetDebug(on)
+    debugOn = on == true
+end
+
 function M.Log(msg)
     print(string.format("[%s] %s\n", LIB_NAME, tostring(msg)))
+end
+
+--- Verbose traces (collapse, open/close, section register). Off by default.
+function M.Debug(msg)
+    if debugOn then
+        M.Log(msg)
+    end
 end
 
 function M.IsValid(obj)

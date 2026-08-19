@@ -15,7 +15,7 @@ local Input = require("ModMenu.core.input")
 local InputMode = require("ModMenu.core.inputmode")
 local Theme = require("ModMenu.core.theme")
 
-local Log = Util.Log
+local Debug = Util.Debug
 local Construct = Umg.Construct
 local CreateTextButton = Umg.CreateTextButton
 local AddSpacer = Umg.AddSpacer
@@ -151,7 +151,7 @@ function M.Apply(S, tabId)
         return
     end
     S.activeTab = tabId
-    Log("Tab -> " .. tabId)
+    Debug("Tab -> " .. tabId)
     if not S.menuOpen then
         if Util.IsValid(S.menuRoot) then
             S.contentDirty = true

@@ -30,6 +30,10 @@ local function Log(msg)
     Util.Log(msg)
 end
 
+local function Debug(msg)
+    Util.Debug(msg)
+end
+
 local function IsValid(obj)
     return Util.IsValid(obj)
 end
@@ -92,7 +96,7 @@ local function InstallUe4ss(opts)
             mouseClickLatch = true
         end
     end)
-    Log(string.format("input backend=ue4ss toggle=%s", tostring(opts.keyName or opts.key)))
+    Debug(string.format("input backend=ue4ss toggle=%s", tostring(opts.keyName or opts.key)))
 end
 
 local function InstallEngine(opts)
@@ -136,7 +140,7 @@ local function InstallEngine(opts)
         end
     end))
 
-    Log(string.format("input backend=engine poll %s + LMB (%dms)", tostring(opts.keyName), ENGINE_POLL_MS))
+    Debug(string.format("input backend=engine poll %s + LMB (%dms)", tostring(opts.keyName), ENGINE_POLL_MS))
 end
 
 local function InstallConsoleCommand(opts)
@@ -170,7 +174,7 @@ local function InstallConsoleCommand(opts)
         end
         return true
     end)
-    Log(string.format("console command %q registered", name))
+    Debug(string.format("console command %q registered", name))
 end
 
 --- Bind toggle + LMB once. Same backend for both.

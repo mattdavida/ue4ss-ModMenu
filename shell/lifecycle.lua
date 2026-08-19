@@ -16,6 +16,7 @@ local Build = require("ModMenu.shell.build")
 local Theme = require("ModMenu.core.theme")
 
 local Log = Util.Log
+local Debug = Util.Debug
 local IsValid = Util.IsValid
 local SafeCall = Util.SafeCall
 local Dropdown = Widgets.get("dropdown")
@@ -145,7 +146,7 @@ function M.Open(S, opts)
     Instance.NoteOpened()
     InputMode.SetActive(true)
     M.StartPoll(S)
-    Log(string.format("OPEN tag=%s", tostring(Instance.GetTag())))
+    Debug(string.format("OPEN tag=%s", tostring(Instance.GetTag())))
     for _, fn in ipairs(S.onOpenCallbacks) do
         SafeCall(fn)
     end
@@ -161,7 +162,7 @@ function M.Close(S)
     S.menuOpen = false
     local remaining = Instance.NoteClosed()
     InputMode.SetActive(false, remaining)
-    Log(string.format("CLOSED tag=%s openRemaining=%s", tostring(Instance.GetTag()), tostring(remaining)))
+    Debug(string.format("CLOSED tag=%s openRemaining=%s", tostring(Instance.GetTag()), tostring(remaining)))
 end
 
 function M.Toggle(S)
@@ -212,7 +213,7 @@ function M.InstallHooks(S)
         ExecuteInGameThread(function()
             local wasOpen = S.menuOpen
             Build.Destroy(S, S.stopPoll)
-            Log("ClientRestart — shell reset")
+            Debug("ClientRestart — shell reset")
             if wasOpen then
                 -- Already-open session: restore without re-checking the host gate.
                 M.Open(S, { skipCanOpen = true })

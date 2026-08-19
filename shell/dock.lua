@@ -10,7 +10,7 @@ local Config = require("ModMenu.core.config")
 local Widgets = require("ModMenu.widgets.init")
 
 local Dropdown = Widgets.get("dropdown")
-local Log = Util.Log
+local Debug = Util.Debug
 local Construct = Umg.Construct
 local StyleText = Umg.StyleText
 
@@ -75,7 +75,7 @@ function M.Set(S, side)
     S.config.dock = Config.NormalizeDock(side)
     M.ApplyPercentLayout(S.panelSlot, S.config)
     M.SyncChrome(S)
-    Log("Dock -> " .. S.config.dock)
+    Debug("Dock -> " .. S.config.dock)
 end
 
 function M.Flip(S)

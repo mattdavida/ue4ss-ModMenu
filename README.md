@@ -92,6 +92,7 @@ ModMenu.Init({
     dock = "left", -- "left" | "right"
     -- theme = "dark", -- charcoal panel; omit for the current ("light") look
     -- tabs = { "Cheats", "Give", "Keybinds" }, -- omit = single scroll
+    -- debug = true, -- verbose [ModMenu] traces (open/close, collapse, register)
     -- inputBackend = "engine", -- opt-in when RegisterKeyBind does not fire
     -- consoleCommand = "modmenu",
 })
@@ -197,6 +198,7 @@ Configure and bind this mod’s shell. Safe to call more than once (updates conf
 | `tabs` | `nil` | Optional `{ "Cheats", "Give", ... }`. Adds a tab strip; only the active tab's sections are built. Omit = current single-scroll menu. Duplicate / empty names error. |
 | `canOpen` | `nil` | Optional `function(): boolean` or `false, "reason"`. Gates **open** (key toggle + `ModMenu.Open`); close is never gated. Pass `false` on a later `Init` to clear. |
 | `ignoreLook` | `false` | Opt-in. While open, `SetIgnoreLookInput(true)` so mouse-look games do not spin the camera. Default off — hosts that need a locked camera must pass `true`. |
+| `debug` | `false` | Verbose `[ModMenu]` traces (open/close, collapse, register). Failures always print. |
 
 Also installs viewport hooks and the input backend (`core/input.lua`): toggle + LMB click latch. Default `ue4ss` uses `RegisterKeyBind`. Pass `inputBackend = "engine"` on games where those binds never fire (e.g. Code Vein 2); that polls Unreal `IsInputKeyDown` for the toggle key and left mouse.
 
@@ -405,6 +407,7 @@ Supported: `checkbox` | `button` | `dropdown` | `label` | `separator` | `number`
 ```lua
 { type = "label", label = "Hint text" }
 { type = "label", id = "status", label = "Ready" }  -- id required for SetLabel
+-- Empty / whitespace-only labels are collapsed (no leftover gap). SetLabel("") hides the row; SetLabel("text") shows it again.
 ```
 
 ### `button`
@@ -667,9 +670,10 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 7. **Large lists** — keep `maxVisible` bounded; filter narrows the working set. Building thousands of UButtons at once is risky.
 8. **Game readiness** — many game objects only exist after a save is loaded; surface that in a status `label` and/or `OnOpen` retry.
 9. **Callbacks** — errors inside `onClick` / `onChange` are caught and logged as `[ModMenu] callback error: ...`.
-10. **Hot-reload** — `ModRef` shared vars (`NextInstanceId`, key claims, open count) are **not** cleared on Ctrl+R.
-11. **Collapse** — opt-in (`collapsible = true`). Accordion header: title on the left, `+` (closed) / `-` (open) on the right. Toggle show/hides the section body (same as dropdowns; no content rebuild). Session-only per section `id` (survives close/open; not written to disk). Re-Register keeps the current open/closed state. Nested groups use `type = "fold"` inside `items` — same session memory per `sectionId.foldId` (see **Item types**).
-12. **Tabs** — opt-in (`Init({ tabs = { ... } })`). Strip under title / dock. Only the active tab's sections are constructed; switching rebuilds that body (not a hidden full tree). `Register({ tab = "Give" })`; omit `tab` = first name. `Get` / `Set` still work for hidden tabs. Session remembers the last tab (not disk). Keyboard Q/E is not in v1.
+10. **Logging** — quiet by default. Failures still print (`CreateShell failed`, `KEY CONFLICT`, `OPEN blocked`). `Init({ debug = true })` restores open/close, collapse, and register traces.
+11. **Hot-reload** — `ModRef` shared vars (`NextInstanceId`, key claims, open count) are **not** cleared on Ctrl+R.
+12. **Collapse** — opt-in (`collapsible = true`). Accordion header: title on the left, `+` (closed) / `-` (open) on the right. Toggle show/hides the section body (same as dropdowns; no content rebuild). Session-only per section `id` (survives close/open; not written to disk). Re-Register keeps the current open/closed state. Nested groups use `type = "fold"` inside `items` — same session memory per `sectionId.foldId` (see **Item types**).
+13. **Tabs** — opt-in (`Init({ tabs = { ... } })`). Strip under title / dock. Only the active tab's sections are constructed; switching rebuilds that body (not a hidden full tree). `Register({ tab = "Give" })`; omit `tab` = first name. `Get` / `Set` still work for hidden tabs. Session remembers the last tab (not disk). Keyboard Q/E is not in v1.
 
 ### Known limits
 

@@ -96,6 +96,7 @@ function M.AddSpacer(parent, name, height)
         spacer:SetSize({ X = 1, Y = height or 12 })
     end)
     parent:AddChildToVerticalBox(spacer)
+    return spacer
 end
 
 --- Attach a widget to ctx.contentBox (VerticalBox or HorizontalBox via ctx.layout).
@@ -133,9 +134,9 @@ end
 --- Trailing pad after an item. No-op in horizontal rows (slot padding handles gaps).
 function M.AddItemPad(ctx, name, size)
     if ctx.layout == "horizontal" then
-        return
+        return nil
     end
-    M.AddSpacer(ctx.contentBox, name, size or 8)
+    return M.AddSpacer(ctx.contentBox, name, size or 8)
 end
 
 --- Style an EditableTextBox from theme field tokens.

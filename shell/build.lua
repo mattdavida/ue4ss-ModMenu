@@ -15,6 +15,7 @@ local Collapse = require("ModMenu.shell.collapse")
 local Tabs = require("ModMenu.shell.tabs")
 
 local Log = Util.Log
+local Debug = Util.Debug
 local IsValid = Util.IsValid
 local Construct = Umg.Construct
 local StyleText = Umg.StyleText
@@ -250,7 +251,7 @@ function M.Create(S)
     S.contentBox = vbox
     M.BuildContent(S)
 
-    Log(string.format(
+    Debug(string.format(
         "Shell ready name=ModMenu_Root_%s z=%d dock=%s (~%.0f%% x ~%.0f%%). Sections: %d",
         suffix,
         Instance.GetViewportZ(),

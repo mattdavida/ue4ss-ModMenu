@@ -54,7 +54,7 @@ function M.Ensure(config)
     instanceTag = SanitizeTag(tag)
     viewportZ = VIEWPORT_Z_BASE + (instanceSerial - 1)
 
-    Util.Log(string.format(
+    Util.Debug(string.format(
         "Instance identity serial=%d tag=%q viewportZ=%d",
         instanceSerial,
         instanceTag,
@@ -128,9 +128,9 @@ function M.ClaimToggleKey(config, keyHint)
             me
         ))
     elseif type(owner) == "string" and owner == me then
-        Util.Log(string.format("Key %s already claimed by this instance (%q)", hint, me))
+        Util.Debug(string.format("Key %s already claimed by this instance (%q)", hint, me))
     else
-        Util.Log(string.format("Key %s claimed by %q", hint, me))
+        Util.Debug(string.format("Key %s claimed by %q", hint, me))
     end
 
     -- Last Init wins the registry slot (still useful: next mod sees the latest owner).

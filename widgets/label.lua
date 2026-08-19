@@ -21,23 +21,39 @@ function Label.build(ctx)
     if ctx.layout ~= "horizontal" then
         umg.EnableAutoWrap(label)
     end
-    umg.AddToContent(ctx, label, { fillVertical = ctx.layout ~= "horizontal" })
-    umg.AddItemPad(ctx, ctx.namePrefix .. "_Pad", 6)
+    umg.AddToContent(ctx, label)
+    local pad = umg.AddItemPad(ctx, ctx.namePrefix .. "_Pad", 6)
+    local ctrl = {
+        kind = "label",
+        sectionId = ctx.section.id,
+        item = item,
+        widget = label,
+        pad = pad,
+        valueKey = item.id and ctx.ValueKey(ctx.section.id, item.id) or nil,
+    }
+    Label.apply(ctrl, item.label, ctx)
     if item.id then
-        table.insert(ctx.liveControls, {
-            kind = "label",
-            sectionId = ctx.section.id,
-            item = item,
-            widget = label,
-            valueKey = ctx.ValueKey(ctx.section.id, item.id),
-        })
+        table.insert(ctx.liveControls, ctrl)
     end
 end
 
 function Label.apply(ctrl, text, ctx)
+    local VIS_VISIBLE = 0
+    local VIS_COLLAPSED = 1
+    local s = tostring(text or "")
     if ctrl.widget ~= nil then
-        ctx.umg.SetLabelText(ctrl.widget, tostring(text))
+        ctx.umg.SetLabelText(ctrl.widget, s)
     end
+    local empty = s:match("^%s*$") ~= nil
+    local vis = empty and VIS_COLLAPSED or VIS_VISIBLE
+    pcall(function()
+        if ctrl.widget ~= nil then
+            ctrl.widget:SetVisibility(vis)
+        end
+        if ctrl.pad ~= nil then
+            ctrl.pad:SetVisibility(vis)
+        end
+    end)
 end
 
 return Label
