@@ -59,7 +59,7 @@ local Registry = require("ModMenu.shell.registry")
 
 local ModMenu = {}
 
-local Log = Util.Log
+local Debug = Util.Debug
 
 local config = Config.New()
 
@@ -143,6 +143,7 @@ end
 ---@param opts table|nil
 function ModMenu.Init(opts)
     Config.ApplyInit(config, opts, { instanceUnlocked = Instance.GetTag() == nil })
+    Util.SetDebug(config.debug == true)
     Instance.Ensure(config)
     Umg.SetDefaults({ fontItem = config.fontItem, colors = config.colors })
     Lifecycle.InstallHooks(S)
@@ -156,7 +157,7 @@ function ModMenu.Init(opts)
     if type(config.tabs) == "table" and #config.tabs > 0 then
         tabList = table.concat(config.tabs, ",")
     end
-    Log(string.format(
+    Debug(string.format(
         "Init — title=%q key=%s backend=%s dock=%s theme=%s tabs=%s instance=%q serial=%s z=%d",
         tostring(config.title),
         tostring(config.keyHint or config.key),

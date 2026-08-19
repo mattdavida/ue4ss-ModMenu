@@ -15,7 +15,7 @@ local Theme = require("ModMenu.core.theme")
 local Input = require("ModMenu.core.input")
 local Session = require("ModMenu.shell.session")
 
-local Log = Util.Log
+local Debug = Util.Debug
 local SafeCall = Util.SafeCall
 
 -- Isolated on the right like a shadcn chevron. ASCII so game fonts stay valid.
@@ -93,7 +93,7 @@ end
 --- click must not both press-edge and latch).
 function M.QueueToggle(S, sectionId, source)
     if S.pendingCollapseId ~= nil then
-        Log(string.format(
+        Debug(string.format(
             "collapse queue skip id=%s via=%s (already pending id=%s via=%s)",
             tostring(sectionId),
             tostring(source),
@@ -104,12 +104,12 @@ function M.QueueToggle(S, sectionId, source)
     end
     S.pendingCollapseId = sectionId
     S.pendingCollapseSource = source
-    Log(string.format("collapse queue id=%s via=%s", tostring(sectionId), tostring(source)))
+    Debug(string.format("collapse queue id=%s via=%s", tostring(sectionId), tostring(source)))
 end
 
 function M.Poll(S, ctrl)
     if Input.WidgetPressedEdge(ctrl, ctrl.widget) then
-        Log(string.format("collapse press-edge id=%s", tostring(ctrl.sectionId)))
+        Debug(string.format("collapse press-edge id=%s", tostring(ctrl.sectionId)))
         Input.SuppressPressEdge(ctrl)
         Input.IgnoreClicks(2)
         M.QueueToggle(S, ctrl.sectionId, "press")
@@ -121,7 +121,7 @@ function M.PollClick(S, ctrl)
     if not Input.WidgetHovered(ctrl.widget) then
         return false
     end
-    Log(string.format("collapse latch id=%s", tostring(ctrl.sectionId)))
+    Debug(string.format("collapse latch id=%s", tostring(ctrl.sectionId)))
     Input.SuppressPressEdge(ctrl)
     Input.IgnoreClicks(2)
     M.QueueToggle(S, ctrl.sectionId, "latch")
@@ -131,7 +131,7 @@ end
 function M.Apply(S, sectionId, source)
     local idx = S.sectionIndexById[sectionId]
     if not idx then
-        Log(string.format("collapse apply miss id=%s via=%s (no section)", tostring(sectionId), tostring(source)))
+        Debug(string.format("collapse apply miss id=%s via=%s (no section)", tostring(sectionId), tostring(source)))
         return
     end
     local section = S.sections[idx]
@@ -150,7 +150,7 @@ function M.Apply(S, sectionId, source)
     end
     Input.IgnoreClicks(2)
 
-    Log(string.format(
+    Debug(string.format(
         "collapse apply id=%s via=%s %s gen=%d header=%s",
         tostring(sectionId),
         tostring(source),
