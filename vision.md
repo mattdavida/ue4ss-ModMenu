@@ -40,12 +40,13 @@ Constructed UMG is flat colors — no CSS, bevels, or hover glow.
 - Optional tabs (`Init({ tabs = { ... } })` + `Register({ tab = ... })`)
 - Widgets: `checkbox`, `button` (variants / active / enabled), `dropdown` (searchable), `label`, `separator`, `number`, `textinput`, `row`, `fold`
 - Showcase dummy: `examples/ModMenuHost.lua`
+- Opt-in overlay cursor (`Init({ cursorMode = "modmenu" })`) for games that suppress the engine pointer
 
 ---
 
 ## Intentionally out of core
 
-- Game-specific software cursors (host glyph if the engine cursor is suppressed)
+- Game-specific **input** reclaim (e.g. Thymesia `NativeUtils` / Wuchang `EnableMouse0`) — host responsibility; `cursorMode = "modmenu"` only draws an overlay glyph
 - Player-facing theme picker
 - Drag-anywhere placement (dock presets only)
 - CommonUI / Enhanced Input / designer WBP

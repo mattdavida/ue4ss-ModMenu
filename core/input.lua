@@ -78,13 +78,13 @@ local function KeyWentDown(pc, fkey, prevDown)
     return (down and not prevDown), down
 end
 
+--- fn must already be pinned. A fresh wrapper here is what GC's into
+--- "Ref was not function" and UE4SS then removes the whole EngineTick hook.
 local function FireOnGameThread(fn)
     if type(fn) ~= "function" then
         return
     end
-    ExecuteInGameThread(function()
-        fn()
-    end)
+    ExecuteInGameThread(fn)
 end
 
 local function InstallUe4ss(opts)
@@ -189,6 +189,13 @@ function M.Install(opts)
     end
     if type(opts.isMenuOpen) ~= "function" then
         error("ModMenu.core.input.Install: isMenuOpen must be a function")
+    end
+    opts.onToggle = Util.PinFn(opts.onToggle)
+    if type(opts.onOpen) == "function" then
+        opts.onOpen = Util.PinFn(opts.onOpen)
+    end
+    if type(opts.onClose) == "function" then
+        opts.onClose = Util.PinFn(opts.onClose)
     end
 
     local backend = opts.backend or "ue4ss"

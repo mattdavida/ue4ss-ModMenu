@@ -73,14 +73,11 @@ end
 
 --- Rebuild now if open; otherwise mark dirty so the next Open rebuilds
 --- (close/open keeps the UMG tree).
-local function RebuildIfOpen(S)
-    if not S.menuOpen then
-        if IsValid(S.menuRoot) then
-            S.contentDirty = true
-        end
-        return
+local function EnsureRebuildFn(S)
+    if S.rebuildFn ~= nil then
+        return S.rebuildFn
     end
-    ExecuteInGameThread(function()
+    S.rebuildFn = Util.PinFn(function()
         local ok, err = pcall(function()
             if Build.Ensure(S) then
                 Build.BuildContent(S)
@@ -89,10 +86,21 @@ local function RebuildIfOpen(S)
             end
         end)
         if not ok then
-            Log("Register rebuild failed: " .. tostring(err))
+            Log("rebuild failed: " .. tostring(err))
             Session.EnsureVisible(S)
         end
     end)
+    return S.rebuildFn
+end
+
+local function RebuildIfOpen(S)
+    if not S.menuOpen then
+        if IsValid(S.menuRoot) then
+            S.contentDirty = true
+        end
+        return
+    end
+    ExecuteInGameThread(EnsureRebuildFn(S))
 end
 
 --- Apply a stored value to any live control with that valueKey.
@@ -328,26 +336,13 @@ function M.SetOptions(S, sectionId, itemId, options, selectedValue)
     end
 
     if S.menuOpen then
-        ExecuteInGameThread(function()
-            local ok, err = pcall(function()
-                if Build.Ensure(S) then
-                    Build.BuildContent(S)
-                    Session.EnsureVisible(S)
-                    Input.ClearClickState()
-                end
-            end)
-            if not ok then
-                Log("SetOptions rebuild failed: " .. tostring(err))
-                Session.EnsureVisible(S)
-            else
-                Debug(string.format(
-                    "SetOptions(%s.%s) rebuilt UI with %d options",
-                    tostring(sectionId),
-                    tostring(itemId),
-                    #list
-                ))
-            end
-        end)
+        ExecuteInGameThread(EnsureRebuildFn(S))
+        Debug(string.format(
+            "SetOptions(%s.%s) scheduled rebuild with %d options",
+            tostring(sectionId),
+            tostring(itemId),
+            #list
+        ))
     elseif IsValid(S.menuRoot) then
         S.contentDirty = true
     end

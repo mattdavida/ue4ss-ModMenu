@@ -8,6 +8,7 @@ local Umg = require("ModMenu.core.umg")
 local Theme = require("ModMenu.core.theme")
 local Instance = require("ModMenu.core.instance")
 local InputMode = require("ModMenu.core.inputmode")
+local Cursor = require("ModMenu.core.cursor")
 local Widgets = require("ModMenu.widgets.init")
 local Session = require("ModMenu.shell.session")
 local Dock = require("ModMenu.shell.dock")
@@ -148,6 +149,7 @@ function M.BuildContent(S)
 end
 
 function M.Teardown(S)
+    Cursor.Destroy(S)
     if IsValid(S.menuRoot) then
         pcall(function()
             S.menuRoot:RemoveFromParent()
