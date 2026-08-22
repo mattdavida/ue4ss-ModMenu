@@ -17,6 +17,7 @@ function M.New()
         rightFrac = 0.01, -- edge margin used for both left and right docks
         theme = "light", -- "light" (current look) | "dark" (charcoal panel)
         colors = Theme.Preset("light"),
+        fontScale = 1, -- multiplies the default font sizes (per-game; 1 = stock)
         fontTitle = 22,
         fontHint = 14,
         fontItem = 16,
@@ -28,6 +29,9 @@ function M.New()
         inputBackend = "ue4ss", -- "ue4ss" | "engine" (opt-in; no auto-detect)
         keyName = nil, -- Unreal FKey name for engine backend (e.g. "F7"); defaults from keyHint
         consoleCommand = nil, -- optional console command (toggle|open|close)
+        cursorMode = "engine", -- "engine" | "modmenu" (opt-in overlay pointer)
+        cursorScale = 1, -- overlay pointer multiplier (1 = native ~28x46; 2 = larger)
+        cursorHideClasses = nil, -- optional string[] of UUserWidget class names to collapse while open
         tabs = nil, -- optional string[] top-level tabs; omit = single scroll
         debug = false, -- verbose [ModMenu] traces (collapse, open/close, register)
     }
@@ -49,6 +53,57 @@ function M.NormalizeInputBackend(value)
         return value
     end
     error('ModMenu.Init: inputBackend must be "ue4ss" or "engine"')
+end
+
+function M.NormalizeCursorMode(value)
+    if value == nil then
+        return "engine"
+    end
+    if value == "engine" or value == "modmenu" then
+        return value
+    end
+    error('ModMenu.Init: cursorMode must be "engine" or "modmenu"')
+end
+
+function M.NormalizeCursorScale(value)
+    if value == nil then
+        return 1
+    end
+    if type(value) ~= "number" or value ~= value or value < 1 then
+        error("ModMenu.Init: cursorScale must be a number >= 1")
+    end
+    local n = math.floor(value + 0.5)
+    if n < 1 then
+        n = 1
+    end
+    if n > 8 then
+        n = 8
+    end
+    return n
+end
+
+--- Host-supplied class short names to collapse while the ModMenu cursor is shown.
+---@param value any
+---@return string[]|nil
+function M.NormalizeCursorHideClasses(value)
+    if value == nil or value == false then
+        return nil
+    end
+    if type(value) ~= "table" then
+        error("ModMenu.Init: cursorHideClasses must be a string array or nil")
+    end
+    local out = {}
+    for i = 1, #value do
+        local name = value[i]
+        if type(name) ~= "string" or name == "" then
+            error("ModMenu.Init: cursorHideClasses entries must be non-empty strings")
+        end
+        out[#out + 1] = name
+    end
+    if #out == 0 then
+        return nil
+    end
+    return out
 end
 
 --- Unique non-empty names. false / {} / omit → nil (single-scroll menu).
@@ -75,6 +130,57 @@ function M.NormalizeTabs(value)
         return nil
     end
     return out
+end
+
+local FONT_DEFAULTS = {
+    fontTitle = 22,
+    fontHint = 14,
+    fontItem = 16,
+    fontSection = 18,
+    fontDropdown = 15,
+}
+
+function M.NormalizeFontScale(value)
+    if value == nil then
+        return 1
+    end
+    if type(value) ~= "number" or value ~= value or value <= 0 then
+        error("ModMenu.Init: fontScale must be a positive number")
+    end
+    return value
+end
+
+local function ScaleFont(base, scale)
+    local n = math.floor((base * scale) + 0.5)
+    if n < 1 then
+        n = 1
+    end
+    return n
+end
+
+--- Scale stock sizes, then apply any explicit font* from this Init (absolute).
+--- Overrides persist across later Init calls that omit that key.
+local function ApplyFonts(config, opts)
+    if opts.fontScale ~= nil then
+        config.fontScale = M.NormalizeFontScale(opts.fontScale)
+    end
+    local scale = config.fontScale or 1
+    local overrides = config._fontOverride
+    if type(overrides) ~= "table" then
+        overrides = {}
+        config._fontOverride = overrides
+    end
+    for key, base in pairs(FONT_DEFAULTS) do
+        if opts[key] ~= nil then
+            if type(opts[key]) ~= "number" or opts[key] < 1 then
+                error("ModMenu.Init: " .. key .. " must be a number >= 1")
+            end
+            config[key] = opts[key]
+            overrides[key] = true
+        elseif not overrides[key] then
+            config[key] = ScaleFont(base, scale)
+        end
+    end
 end
 
 function M.ResolveEngineKeyName(config)
@@ -113,11 +219,7 @@ function M.ApplyInit(config, opts, ctx)
         end
         config.colors = Theme.Merge(config.colors, opts.colors)
     end
-    if opts.fontTitle ~= nil then config.fontTitle = opts.fontTitle end
-    if opts.fontHint ~= nil then config.fontHint = opts.fontHint end
-    if opts.fontItem ~= nil then config.fontItem = opts.fontItem end
-    if opts.fontSection ~= nil then config.fontSection = opts.fontSection end
-    if opts.fontDropdown ~= nil then config.fontDropdown = opts.fontDropdown end
+    ApplyFonts(config, opts)
     if opts.canOpen ~= nil then
         if opts.canOpen ~= false and type(opts.canOpen) ~= "function" then
             error("ModMenu.Init: canOpen must be a function or false/nil")
@@ -148,6 +250,15 @@ function M.ApplyInit(config, opts, ctx)
             config.consoleCommand = opts.consoleCommand
         end
     end
+    if opts.cursorMode ~= nil then
+        config.cursorMode = M.NormalizeCursorMode(opts.cursorMode)
+    end
+    if opts.cursorScale ~= nil then
+        config.cursorScale = M.NormalizeCursorScale(opts.cursorScale)
+    end
+    if opts.cursorHideClasses ~= nil then
+        config.cursorHideClasses = M.NormalizeCursorHideClasses(opts.cursorHideClasses)
+    end
     -- Human-readable FName tag (Live View). Locked after first EnsureInstanceIdentity.
     if opts.instanceId ~= nil and ctx.instanceUnlocked then
         config.instanceId = opts.instanceId
@@ -161,6 +272,8 @@ function M.ApplyInit(config, opts, ctx)
         config.keyHint = config.keyHint or "F6"
     end
     config.inputBackend = M.NormalizeInputBackend(config.inputBackend)
+    config.cursorMode = M.NormalizeCursorMode(config.cursorMode)
+    config.cursorScale = M.NormalizeCursorScale(config.cursorScale)
 end
 
 return M

@@ -5,6 +5,7 @@
     local ModMenu = require("ModMenu.ModMenu")
     ModMenu.Init({ title = "My Mod Menu", key = Key.F6 }) -- ignoreLook = true to lock camera
     -- inputBackend = "engine" when RegisterKeyBind does not fire (e.g. Code Vein 2)
+    -- cursorMode = "modmenu" when the game suppresses the engine cursor
     ModMenu.Register({
       id = "MyMod",
       title = "My Mod",
@@ -85,6 +86,9 @@ InputMode.Bind({
     isMenuOpen = function()
         return S.menuOpen == true
     end,
+    getCursorMode = function()
+        return S.config.cursorMode
+    end,
 })
 
 S.makeWidgetCtx = function()
@@ -158,13 +162,15 @@ function ModMenu.Init(opts)
         tabList = table.concat(config.tabs, ",")
     end
     Debug(string.format(
-        "Init — title=%q key=%s backend=%s dock=%s theme=%s tabs=%s instance=%q serial=%s z=%d",
+        "Init — title=%q key=%s backend=%s cursor=%s dock=%s theme=%s tabs=%s fontScale=%s instance=%q serial=%s z=%d",
         tostring(config.title),
         tostring(config.keyHint or config.key),
         tostring(config.inputBackend),
+        tostring(config.cursorMode),
         tostring(config.dock),
         tostring(config.theme),
         tabList,
+        tostring(config.fontScale),
         tostring(Instance.GetTag()),
         tostring(Instance.GetSerial()),
         Instance.GetViewportZ()
@@ -290,6 +296,16 @@ function ModMenu.SetOptions(sectionId, itemId, options, selectedValue)
     return Registry.SetOptions(S, sectionId, itemId, options, selectedValue)
 end
 
+local openOnGameThread = Util.PinFn(function()
+    Lifecycle.Open(S)
+end)
+local closeOnGameThread = Util.PinFn(function()
+    Lifecycle.Close(S)
+end)
+local toggleOnGameThread = Util.PinFn(function()
+    Lifecycle.Toggle(S)
+end)
+
 --- Register a callback invoked each time the menu opens (after shell is visible).
 ---@param fn function
 function ModMenu.OnOpen(fn)
@@ -303,24 +319,18 @@ function ModMenu.Open()
     if not initialized then
         ModMenu.Init({})
     end
-    ExecuteInGameThread(function()
-        Lifecycle.Open(S)
-    end)
+    ExecuteInGameThread(openOnGameThread)
 end
 
 function ModMenu.Close()
-    ExecuteInGameThread(function()
-        Lifecycle.Close(S)
-    end)
+    ExecuteInGameThread(closeOnGameThread)
 end
 
 function ModMenu.Toggle()
     if not initialized then
         ModMenu.Init({})
     end
-    ExecuteInGameThread(function()
-        Lifecycle.Toggle(S)
-    end)
+    ExecuteInGameThread(toggleOnGameThread)
 end
 
 function ModMenu.IsOpen()

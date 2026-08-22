@@ -26,12 +26,22 @@ end
 local isMenuOpen = function()
     return false
 end
+local getCursorMode = function()
+    return "engine"
+end
 
----@param hooks { getMenuRoot: fun(): any, getIgnoreLook: fun(): boolean, isMenuOpen: fun(): boolean }
+---@param hooks { getMenuRoot: fun(): any, getIgnoreLook: fun(): boolean, isMenuOpen: fun(): boolean, getCursorMode?: fun(): string }
 function M.Bind(hooks)
     getMenuRoot = hooks.getMenuRoot
     getIgnoreLook = hooks.getIgnoreLook
     isMenuOpen = hooks.isMenuOpen
+    if type(hooks.getCursorMode) == "function" then
+        getCursorMode = hooks.getCursorMode
+    end
+end
+
+local function OverlayCursor()
+    return getCursorMode() == "modmenu"
 end
 
 --- GameAndUI with DoNotLock; try UE5 (5 args) then UE4 (4 args).
@@ -109,7 +119,11 @@ local function ForceMenuCursor(pc)
         Shared.Set(Shared.SAVED_HOVER, pc.bEnableMouseOverEvents == true)
         Shared.Set(Shared.INPUT_SAVED, true)
     end
-    pc.bShowMouseCursor = true
+    -- Overlay mode: the game is expected to keep the engine cursor hidden.
+    -- Forcing bShowMouseCursor just starts a fight that looks like a steal.
+    if not OverlayCursor() then
+        pc.bShowMouseCursor = true
+    end
     pc.bEnableClickEvents = true
     pc.bEnableMouseOverEvents = true
     if getIgnoreLook() then
@@ -193,12 +207,31 @@ function M.Reclaim()
     M.SetActive(true)
 end
 
+--- Re-bump look-ignore without re-applying GameAndUI (keeps text/checkbox focus).
+function M.RefreshLookIgnore(pc)
+    if not getIgnoreLook() then
+        return
+    end
+    if not IsValid(pc) then
+        pc = UEHelpers.GetPlayerController()
+    end
+    if IsValid(pc) then
+        EnsureLookIgnored(pc)
+    end
+end
+
 --- True when the game cleared cursor / click / hover / (opt-in) look-ignore.
+--- Overlay cursor: a hidden engine pointer is expected — do not treat that
+--- (or a cleared look-ignore) as a full input-mode steal. Re-applying
+--- GameAndUI every tick kills checkbox clicks and EditableTextBox focus.
 ---@param pc any
 ---@return boolean
 function M.CursorStolen(pc)
     if not IsValid(pc) then
         return false
+    end
+    if OverlayCursor() then
+        return not pc.bEnableClickEvents or not pc.bEnableMouseOverEvents
     end
     local lookOk = true
     if getIgnoreLook() then

@@ -7,6 +7,7 @@ local Util = require("ModMenu.core.util")
 local Input = require("ModMenu.core.input")
 local InputMode = require("ModMenu.core.inputmode")
 local Instance = require("ModMenu.core.instance")
+local Cursor = require("ModMenu.core.cursor")
 local Widgets = require("ModMenu.widgets.init")
 local Session = require("ModMenu.shell.session")
 local Dock = require("ModMenu.shell.dock")
@@ -97,6 +98,9 @@ function M.StartPoll(S)
             local pc = UEHelpers.GetPlayerController()
             if InputMode.CursorStolen(pc) then
                 InputMode.Reclaim()
+            else
+                -- Overlay / Wuchang: keep look locked without resetting Slate focus.
+                InputMode.RefreshLookIgnore(pc)
             end
             PollControls(S)
         end)
@@ -146,6 +150,25 @@ function M.Open(S, opts)
     Instance.NoteOpened()
     InputMode.SetActive(true)
     M.StartPoll(S)
+    if Cursor.IsEnabled(S) then
+        if S.cursorShowFn == nil then
+            S.cursorShowFn = Util.PinFn(function()
+                S.cursorShowHandle = nil
+                if S.menuOpen then
+                    Cursor.Show(S)
+                    Cursor.StartPoll(S)
+                end
+            end)
+        end
+        if S.cursorShowHandle ~= nil then
+            pcall(function()
+                CancelDelayedAction(S.cursorShowHandle)
+            end)
+            S.cursorShowHandle = nil
+        end
+        -- Brief delay so the shell is in the viewport before the overlay attaches.
+        S.cursorShowHandle = ExecuteInGameThreadWithDelay(50, S.cursorShowFn)
+    end
     Debug(string.format("OPEN tag=%s", tostring(Instance.GetTag())))
     for _, fn in ipairs(S.onOpenCallbacks) do
         SafeCall(fn)
@@ -154,6 +177,13 @@ end
 
 function M.Close(S)
     M.StopPoll(S)
+    if S.cursorShowHandle ~= nil then
+        pcall(function()
+            CancelDelayedAction(S.cursorShowHandle)
+        end)
+        S.cursorShowHandle = nil
+    end
+    Cursor.Hide(S)
     Input.ClearClickState()
     Dropdown.collapseAll(S.liveControls, nil)
     if IsValid(S.menuRoot) then
@@ -189,6 +219,8 @@ function M.OnConfigChanged(S)
             S.panelOutline:SetBrushColor(colors.panelBorder)
         end)
     end
+    -- Cursor overlay is independent of the shell tree (first Init has no root yet).
+    Cursor.OnConfigChanged(S)
     if not IsValid(S.menuRoot) then
         return
     end
@@ -209,16 +241,18 @@ function M.InstallHooks(S)
         M.StopPoll(S)
     end
 
+    S.clientRestartFn = Util.PinFn(function()
+        local wasOpen = S.menuOpen
+        Build.Destroy(S, S.stopPoll)
+        Debug("ClientRestart — shell reset")
+        if wasOpen then
+            -- Already-open session: restore without re-checking the host gate.
+            M.Open(S, { skipCanOpen = true })
+        end
+    end)
+
     RegisterHook("/Script/Engine.PlayerController:ClientRestart", function()
-        ExecuteInGameThread(function()
-            local wasOpen = S.menuOpen
-            Build.Destroy(S, S.stopPoll)
-            Debug("ClientRestart — shell reset")
-            if wasOpen then
-                -- Already-open session: restore without re-checking the host gate.
-                M.Open(S, { skipCanOpen = true })
-            end
-        end)
+        ExecuteInGameThread(S.clientRestartFn)
     end)
 end
 

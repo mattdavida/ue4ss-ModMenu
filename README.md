@@ -59,7 +59,7 @@ Development uses the multi-file tree (what you edit in this repo):
 
 ```
 ModMenu.lua                 ← public API facade
-core/                       ← util, theme, umg, shared, config, instance, inputmode, input, options
+core/                       ← util, theme, umg, shared, config, instance, inputmode, cursor, input, options
 shell/                      ← session, dock, collapse, tabs, build, lifecycle, registry
 widgets/                    ← one module per item type + registry
 tools/
@@ -95,6 +95,9 @@ ModMenu.Init({
     -- debug = true, -- verbose [ModMenu] traces (open/close, collapse, register)
     -- inputBackend = "engine", -- opt-in when RegisterKeyBind does not fire
     -- consoleCommand = "modmenu",
+    -- cursorMode = "modmenu", -- overlay pointer when the game hides the engine cursor
+    -- cursorScale = 1, -- overlay pointer size (1 = native ~28x46; 2 = larger)
+    -- fontScale = 1.25, -- multiply default font sizes (per-game). fontTitle / fontItem / … still override.
 })
 
 MyFeature.RegisterMenu(ModMenu)
@@ -192,12 +195,16 @@ Configure and bind this mod’s shell. Safe to call more than once (updates conf
 | `widthFrac` | `0.32` | Panel width as % of viewport |
 | `topFrac` / `bottomFrac` | `0.05` | Vertical margins |
 | `rightFrac` | `0.01` | Edge margin (both docks) |
-| `fontTitle` / `fontHint` / `fontItem` / `fontSection` / `fontDropdown` | 22 / 14 / 16 / 18 / 15 | Optional. Compact defaults (scale up per-game if needed). `fontDropdown` is header + option rows; match `fontItem` to size dropdowns like buttons. |
+| `fontScale` | `1` | Multiplies the default font sizes (same idea as UE4SS `GuiConsoleFontScaling`). Prefer this for per-game tuning. Explicit `fontTitle` / … still win and are not scaled. |
+| `fontTitle` / `fontHint` / `fontItem` / `fontSection` / `fontDropdown` | 22 / 14 / 16 / 18 / 15 | Optional absolute sizes. Omit and use `fontScale` unless one role needs a one-off size. `fontDropdown` is header + option rows. |
 | `theme` | `"light"` | Author preset. `"light"` is the current look (navy panel, light fields). `"dark"` is charcoal panel, dark fields, teal/gold tokens. Not a player setting. |
 | `colors` | from `theme` | Optional overrides: `{ panelBg = { R, G, B, A }, ... }`. Merged onto the preset. See **Theming**. |
 | `tabs` | `nil` | Optional `{ "Cheats", "Give", ... }`. Adds a tab strip; only the active tab's sections are built. Omit = current single-scroll menu. Duplicate / empty names error. |
 | `canOpen` | `nil` | Optional `function(): boolean` or `false, "reason"`. Gates **open** (key toggle + `ModMenu.Open`); close is never gated. Pass `false` on a later `Init` to clear. |
 | `ignoreLook` | `false` | Opt-in. While open, `SetIgnoreLookInput(true)` so mouse-look games do not spin the camera. Default off — hosts that need a locked camera must pass `true`. |
+| `cursorMode` | `"engine"` | `"engine"` (PlayerController / GameAndUI cursor only) or `"modmenu"` (opt-in HitTestInvisible overlay pointer above the shell). Use when the game suppresses the engine cursor. A later `Init` that changes this (or `cursorScale` / `cursorHideClasses`) rebuilds the overlay if it already exists. |
+| `cursorScale` | `1` | Overlay pointer multiplier (`1`–`8`). The glyph is the Windows arrow (~28×46) with a 1px outline + drop shadow. `2` if you want it larger. Only used when `cursorMode = "modmenu"`. Live `Init` updates rebuild the overlay. |
+| `cursorHideClasses` | `nil` | Optional string array of UUserWidget class short names to collapse while the ModMenu cursor is shown (e.g. `{ "WB_Cursor_C" }`). Host-supplied; empty by default. Class defaults (`Default__…`) are skipped. On close, each widget is restored to the visibility it had before hide — not forced visible. |
 | `debug` | `false` | Verbose `[ModMenu]` traces (open/close, collapse, register). Failures always print. |
 
 Also installs viewport hooks and the input backend (`core/input.lua`): toggle + LMB click latch. Default `ue4ss` uses `RegisterKeyBind`. Pass `inputBackend = "engine"` on games where those binds never fire (e.g. Code Vein 2); that polls Unreal `IsInputKeyDown` for the toggle key and left mouse.
@@ -213,6 +220,21 @@ ModMenu.Init({
     consoleCommand = "modmenu",
     ignoreLook = true,
 })
+```
+
+```lua
+-- Games that hide / replace the engine cursor (overlay pointer):
+ModMenu.Init({
+    title = "Give Item Cmd",
+    instanceId = "GiveItemCmd",
+    key = Key.F6,
+    keyHint = "F6",
+    ignoreLook = true,
+    cursorMode = "modmenu",
+    cursorHideClasses = { "WB_Cursor_C", "WB_CursorHidden_C" },
+})
+-- Wuchang: close the menu before death / area load. ClientRestart with the
+-- shell open fatals in that title only; other games restore the menu fine.
 ```
 
 ```lua
@@ -663,10 +685,10 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 
 1. **Per-mod shell** — each Lua mod has its own ModMenu state (`require` is not shared across mods). Multiple mods may each `Init` an independent panel. UObject roots are named `ModMenu_Root_<instanceId>_<n>` using a `ModRef` serial (`ModMenu.NextInstanceId`) so they never collide under `GameInstance`.
 2. **Toggle keys** — prefer a unique `key` / `keyHint` per mod. Claims are stored as `ModMenu.KeyClaim.<keyHint>`; clashes log **KEY CONFLICT**. On the `ue4ss` backend, UE4SS may fire every binder on that key (both menus toggle — useful for same-author dual docks, confusing for unrelated mods). On `engine`, each shell polls independently.
-3. **Input** — while open, uses GameAndUI + mouse cursor. Buttons / dock / dropdowns fire from `UButton:IsPressed()` (rising edge, 16ms poll) plus the LMB latch + `IsHovered()` fallback. Checkboxes poll persistent `IsChecked()` and do not need either. The toggle key uses `Init inputBackend`: `ue4ss` (`RegisterKeyBind`) or `engine` (poll `IsInputKeyDown`). PlayerController often does **not** see LMB while Slate owns the mouse, so engine-backend menus must not rely on the LMB latch alone. Closing one menu does not force GameOnly while another ModMenu is still open (`ModMenu.OpenCount`). `ClientRestart` / `DestroyShell` do not touch input unless this instance had the menu open. On close, `GameOnly` is applied only if the game had no cursor when we opened (mouse-look); hub/inventory cursors are left alone. Camera look is **not** locked unless `Init({ ignoreLook = true })`.
+3. **Input** — while open, uses GameAndUI + mouse cursor. Buttons / dock / dropdowns fire from `UButton:IsPressed()` (rising edge, 16ms poll) plus the LMB latch + `IsHovered()` fallback. Checkboxes poll persistent `IsChecked()` and do not need either. The toggle key uses `Init inputBackend`: `ue4ss` (`RegisterKeyBind`) or `engine` (poll `IsInputKeyDown`). PlayerController often does **not** see LMB while Slate owns the mouse, so engine-backend menus must not rely on the LMB latch alone. Closing one menu does not force GameOnly while another ModMenu is still open (`ModMenu.OpenCount`). `ClientRestart` / `DestroyShell` do not touch input unless this instance had the menu open. On close, `GameOnly` is applied only if the game had no cursor when we opened (mouse-look); hub/inventory cursors are left alone. Camera look is **not** locked unless `Init({ ignoreLook = true })`. When the engine cursor is suppressed, opt in with `cursorMode = "modmenu"` for a HitTestInvisible overlay pointer (`core/cursor.lua`); optionally pass `cursorHideClasses` to collapse game cursor widgets while open (class defaults are skipped; prior visibility is restored on close). Overlay mode does not treat a hidden engine cursor as stolen (that would re-apply GameAndUI every tick and break checkboxes / text fields). A later `Init` that changes `cursorMode` / `cursorScale` / `cursorHideClasses` rebuilds the overlay if it already exists.
 4. **Dock** — left/right presets only (header button + `SetDock`). No free drag. Session only (not saved to disk).
 5. **Scroll** — the docked panel is a fixed viewport; section content lives in a ScrollBox (mouse wheel). Use `labelWidth` on `number` / `textinput` so amount rows line up like a table.
-6. **FNames** — shell names include `instanceId`; content rebuilds bump an internal generation after `ClearChildren`. Collapse / fold expand/collapse show/hide a body and do not rebuild. Prefer `SetOptions` on searchable lists over constant full rebuilds. Menu close/open keeps the UMG tree (no rebuild) so large sections (Give, keybinds) do not respawn on every toggle. `Register` / non-searchable `SetOptions` rebuild **while the menu is open**, and mark the tree dirty if they run while it is closed so the next `Open` rebuilds. `ClientRestart` destroys the shell and rebuilds.
+6. **FNames** — shell names include `instanceId`; content rebuilds bump an internal generation after `ClearChildren`. Collapse / fold expand/collapse show/hide a body and do not rebuild. Prefer `SetOptions` on searchable lists over constant full rebuilds. Menu close/open keeps the UMG tree (no rebuild) so large sections (Give, keybinds) do not respawn on every toggle. `Register` / non-searchable `SetOptions` rebuild **while the menu is open**, and mark the tree dirty if they run while it is closed so the next `Open` rebuilds. `ClientRestart` destroys the shell and restores it if it was open.
 7. **Large lists** — keep `maxVisible` bounded; filter narrows the working set. Building thousands of UButtons at once is risky.
 8. **Game readiness** — many game objects only exist after a save is loaded; surface that in a status `label` and/or `OnOpen` retry.
 9. **Callbacks** — errors inside `onClick` / `onChange` are caught and logged as `[ModMenu] callback error: ...`.
@@ -677,7 +699,8 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 
 ### Known limits
 
-- Game-specific software cursors (custom glyphs, UIPage stacks) are **host responsibility**. If the engine cursor is suppressed, the host must show its own glyph.
+- Game-specific **input reclaim** (e.g. Thymesia `NativeUtils`, Wuchang `EnableMouse0`) remains **host responsibility**. `cursorMode = "modmenu"` only draws an overlay glyph; it does not replace per-game input adapters.
+- **Wuchang:** close the menu before death or area load. `ClientRestart` with the shell open fatals in that title only (not cursor-related). Other games restore an already-open menu.
 - No free-drag, CommonUI, or designer-authored WBP — dock presets + constructed UMG only.
 - Camera look is **not** locked unless `Init({ ignoreLook = true })`.
 

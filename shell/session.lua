@@ -43,6 +43,20 @@ function M.New(opts)
         collapseApplyFn = nil, ---@type function|nil
         collapseApplyScheduled = false,
         makeWidgetCtx = nil, ---@type fun(): table
+        -- Opt-in cursorMode = "modmenu" overlay (core/cursor.lua).
+        cursorRoot = nil,
+        cursorSlot = nil,
+        cursorPollHandle = nil,
+        cursorPollFn = nil, ---@type function|nil strong ref for LoopInGameThreadWithDelay
+        cursorShowFn = nil, ---@type function|nil
+        cursorShowHandle = nil,
+        clientRestartFn = nil, ---@type function|nil
+        rebuildFn = nil, ---@type function|nil
+        cursorHiddenWidgets = nil, ---@type { widget: any, vis: number|nil }[]|nil
+        cursorScale = nil,
+        cursorHotspotX = nil,
+        cursorHotspotY = nil,
+        cursorConfigSig = nil, ---@type string|nil last applied cursorMode|scale|hideClasses
     }
 end
 

@@ -79,6 +79,7 @@ const MODULES = [
   ["ModMenu.core.config", "core/config.lua"],
   ["ModMenu.core.instance", "core/instance.lua"],
   ["ModMenu.core.inputmode", "core/inputmode.lua"],
+  ["ModMenu.core.cursor", "core/cursor.lua"],
   ["ModMenu.core.input", "core/input.lua"],
   ["ModMenu.core.options", "core/options.lua"],
   ...discoverWidgetModules(),
