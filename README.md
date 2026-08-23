@@ -332,6 +332,44 @@ ModMenu.SetButtonActive(sectionId, itemId, true)     -- selected/on (green)
 
 Button items need an `id`. Optional Register fields: `enabled = false`, `variant = "primary"|"danger"|…`, `active = true`. Paint order: disabled, then active, then variant. `accent` is accepted as an alias of `primary`.
 
+### Confirm
+
+In-shell modal on the docked panel. Blocks other clicks until Cancel or Confirm. Closing the menu dismisses without running the action.
+
+```lua
+-- Declarative (preferred): onClick waits for Confirm
+{
+  type = "button",
+  id = "giveAll",
+  label = "Give All Items",
+  variant = "danger",
+  confirm = {
+    title = "Give all items?",
+    message = "Adds every pickup. This cannot be undone here.",
+    confirmLabel = "Give all", -- optional, default "Confirm"
+    cancelLabel = "Cancel",    -- optional
+    -- variant = "danger",     -- optional; defaults to the button variant
+  },
+  onClick = function()
+    -- only after Confirm
+  end,
+}
+
+-- Imperative (dynamic copy)
+ModMenu.Confirm({
+    title = "Reveal all icons?",
+    message = "Paints every map icon and autosaves.",
+    confirmLabel = "Reveal all",
+    variant = "danger",
+    onConfirm = function()
+        -- ...
+    end,
+    -- onCancel = function() end,
+})
+
+ModMenu.IsConfirmOpen()
+```
+
 ### Dropdown options
 
 ```lua
@@ -442,9 +480,12 @@ Supported: `checkbox` | `button` | `dropdown` | `label` | `separator` | `number`
   enabled = true,   -- optional; false blocks clicks + disabled chrome
   variant = "default", -- optional: default|primary|secondary|success|danger|warning|info
   active = false,   -- optional; true = selected/on (wins over variant)
+  -- confirm = { title = "Are you sure?", message = "Cannot undo.", confirmLabel = "Do it" },
   onClick = function() end,
 }
 ```
+
+`confirm` opens an in-shell modal over the panel. `onClick` runs only after Confirm. Cancel or closing the menu does nothing. One confirm at a time (a new one dismisses the old as Cancel).
 
 Use `SetButtonLabel` / `SetButtonEnabled` / `SetButtonVariant` / `SetButtonActive` for busy and toggle-on states.
 
@@ -725,7 +766,7 @@ ModMenu.Init({
 | `light` | Current ModMenu: navy panel, mid-blue buttons, light editable fields |
 | `dark` | Charcoal panel, thin edge, dark fields, teal (`textAccent`) + gold (`textStatus`) |
 
-`textAccent` / `textStatus` remain for tabs/status. Button variants use their own `buttonBg*` / `buttonText*` tokens (Bootstrap-like primary/danger/warning).
+`textAccent` / `textStatus` remain for tabs/status. Button variants use their own `buttonBg*` / `buttonText*` tokens (Bootstrap-like primary/danger/warning). Confirm uses `overlayDim` + `confirmCardBg` + `confirmDivider`. The card is content-sized (not panel-tall).
 
 North-star look is the README hero shots (`ModMenuHero.png` / `ModMenuHero2.png`). Constructed UMG is flat colors, not bevels. 2-column grids and hover glow are optional leftovers in `vision.md`.
 

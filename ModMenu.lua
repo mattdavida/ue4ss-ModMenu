@@ -42,6 +42,7 @@
   Nested fold: { type = "fold", id, label, collapsed = true, items = { ... } }.
   Theme (authors): Init({ theme = "light" | "dark" }) — light is the current look.
   Tabs: Init({ tabs = { "Cheats", "Give" } }) + Register({ tab = "Cheats", ... }).
+  Confirm: button { confirm = { title, message } } or ModMenu.Confirm({ onConfirm = fn }).
 
   Internals: core/ helpers + widgets/ registry (see README.md).
 ]]
@@ -57,6 +58,7 @@ local Dock = require("ModMenu.shell.dock")
 local Tabs = require("ModMenu.shell.tabs")
 local Lifecycle = require("ModMenu.shell.lifecycle")
 local Registry = require("ModMenu.shell.registry")
+local Confirm = require("ModMenu.shell.confirm")
 
 local ModMenu = {}
 
@@ -106,6 +108,9 @@ S.makeWidgetCtx = function()
             Session.EnsureVisible(S)
         end,
         foldCollapsedByKey = S.foldCollapsedByKey,
+        ShowConfirm = function(item)
+            Confirm.FromButton(S, item)
+        end,
     }
 end
 
@@ -335,6 +340,18 @@ end
 
 function ModMenu.IsOpen()
     return S.menuOpen == true
+end
+
+--- In-shell confirm modal. onConfirm runs only if the player presses Confirm.
+--- Replaces any open confirm (treated as Cancel). Menu must be open.
+---@param opts { title?: string, message?: string, confirmLabel?: string, cancelLabel?: string, variant?: string, onConfirm: function, onCancel?: function }
+---@return boolean
+function ModMenu.Confirm(opts)
+    return Confirm.Show(S, opts)
+end
+
+function ModMenu.IsConfirmOpen()
+    return Confirm.IsOpen(S)
 end
 
 --- List registered section ids (debug / tooling).
