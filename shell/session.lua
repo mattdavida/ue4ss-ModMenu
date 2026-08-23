@@ -42,6 +42,12 @@ function M.New(opts)
         collapseApplyQueue = {}, ---@type { id: string, source: string|nil }[]
         collapseApplyFn = nil, ---@type function|nil
         collapseApplyScheduled = false,
+        menuCanvas = nil, ---@type any CanvasPanel (panel + confirm overlay)
+        confirm = nil, ---@type table|nil active confirm spec
+        confirmRoot = nil,
+        confirmSlot = nil,
+        confirmControls = nil,
+        confirmGen = 0,
         makeWidgetCtx = nil, ---@type fun(): table
         -- Opt-in cursorMode = "modmenu" overlay (core/cursor.lua).
         cursorRoot = nil,

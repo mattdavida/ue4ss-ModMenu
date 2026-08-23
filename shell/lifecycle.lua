@@ -14,6 +14,7 @@ local Dock = require("ModMenu.shell.dock")
 local Collapse = require("ModMenu.shell.collapse")
 local Tabs = require("ModMenu.shell.tabs")
 local Build = require("ModMenu.shell.build")
+local Confirm = require("ModMenu.shell.confirm")
 local Theme = require("ModMenu.core.theme")
 
 local Log = Util.Log
@@ -36,6 +37,10 @@ function M.StopPoll(S)
 end
 
 local function PollControls(S)
+    if Confirm.Poll(S) then
+        return
+    end
+
     local ctx = S.makeWidgetCtx()
 
     -- Continuous polls (search filter, checkbox state, UButton IsPressed).
@@ -176,6 +181,7 @@ function M.Open(S, opts)
 end
 
 function M.Close(S)
+    Confirm.Hide(S, "close")
     M.StopPoll(S)
     if S.cursorShowHandle ~= nil then
         pcall(function()

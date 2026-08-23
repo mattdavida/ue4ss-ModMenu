@@ -14,6 +14,7 @@ local Session = require("ModMenu.shell.session")
 local Dock = require("ModMenu.shell.dock")
 local Collapse = require("ModMenu.shell.collapse")
 local Tabs = require("ModMenu.shell.tabs")
+local Confirm = require("ModMenu.shell.confirm")
 
 local Log = Util.Log
 local Debug = Util.Debug
@@ -149,6 +150,7 @@ function M.BuildContent(S)
 end
 
 function M.Teardown(S)
+    Confirm.Hide(S, "close")
     Cursor.Destroy(S)
     if IsValid(S.menuRoot) then
         pcall(function()
@@ -160,9 +162,14 @@ function M.Teardown(S)
     end
     S.menuRoot = nil
     S.contentBox = nil
+    S.menuCanvas = nil
     S.panelSlot = nil
     S.panelBorder = nil
     S.panelOutline = nil
+    S.confirm = nil
+    S.confirmRoot = nil
+    S.confirmSlot = nil
+    S.confirmControls = nil
     Session.ClearLive(S)
     S.menuOpen = false
 end
@@ -202,6 +209,7 @@ function M.Create(S)
 
     local canvas = Construct("/Script/UMG.CanvasPanel", tree, "ModMenu_Canvas_" .. suffix)
     tree.RootWidget = canvas
+    S.menuCanvas = canvas
 
     local colors = Theme.Of(config)
     local fill = Construct("/Script/UMG.Border", canvas, "ModMenu_Border_" .. suffix)

@@ -368,6 +368,11 @@ ModMenu.Register({
                     id = "giveAllBtn",
                     label = "Give ALL items",
                     variant = "warning",
+                    confirm = {
+                        title = "Give all items?",
+                        message = "Mock grant of every catalog item. This cannot be undone here.",
+                        confirmLabel = "Give all",
+                    },
                     onClick = function()
                         Log("give ALL (mock)")
                     end,

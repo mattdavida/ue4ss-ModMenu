@@ -38,7 +38,8 @@ Constructed UMG is flat colors — no CSS, bevels, or hover glow.
 - Author themes (`light` / `dark` + color overrides)
 - Collapsible sections + nested `fold`
 - Optional tabs (`Init({ tabs = { ... } })` + `Register({ tab = ... })`)
-- Widgets: `checkbox`, `button` (variants / active / enabled), `dropdown` (searchable), `label`, `separator`, `number`, `textinput`, `row`, `fold`
+- Widgets: `checkbox`, `button` (variants / active / enabled / confirm), `dropdown` (searchable), `label`, `separator`, `number`, `textinput`, `row`, `fold`
+- In-shell confirm modal (`button.confirm` / `ModMenu.Confirm`)
 - Showcase dummy: `examples/ModMenuHost.lua`
 - Opt-in overlay cursor (`Init({ cursorMode = "modmenu" })`) for games that suppress the engine pointer
 

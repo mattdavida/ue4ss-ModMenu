@@ -44,6 +44,9 @@ local KEYS = {
     "dropdownOptionBg",
     "dropdownOptionText",
     "dropdownMore",
+    "overlayDim",
+    "confirmCardBg",
+    "confirmDivider",
 }
 
 local function C(r, g, b, a)
@@ -107,6 +110,9 @@ local LIGHT = {
     dropdownOptionBg = C(0.88, 0.90, 0.94),
     dropdownOptionText = C(0.06, 0.07, 0.10),
     dropdownMore = C(0.70, 0.75, 0.85),
+    overlayDim = C(0.02, 0.03, 0.05, 0.62),
+    confirmCardBg = C(0.08, 0.10, 0.16, 0.98),
+    confirmDivider = C(0.22, 0.26, 0.34, 1.0),
 }
 
 -- Dark preset: charcoal panel, dark fields. Flat UMG (no bevel/glow).
@@ -145,6 +151,9 @@ local DARK = {
     dropdownOptionBg = C(0.08, 0.08, 0.09),
     dropdownOptionText = C(0.92, 0.92, 0.93),
     dropdownMore = C(0.62, 0.62, 0.64),
+    overlayDim = C(0.04, 0.04, 0.05, 0.62),
+    confirmCardBg = C(0.16, 0.16, 0.17, 0.98),
+    confirmDivider = C(0.30, 0.30, 0.32, 1.0),
 }
 
 local PAD = {

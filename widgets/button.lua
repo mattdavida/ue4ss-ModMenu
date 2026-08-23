@@ -6,6 +6,7 @@
     active = true    → "this is on" (green) — not a variant
     variant          → Bootstrap-like intent (primary/danger/warning/…)
     default          → theme buttonBg
+    confirm          → optional table; onClick waits for the in-shell modal
 ]]
 
 local Util = require("ModMenu.core.util")
@@ -112,6 +113,22 @@ function Button.validate(item, sectionId, index)
     if item.variant ~= nil and Button.NormalizeVariant(item.variant) == nil then
         error(prefix .. " variant must be " .. VARIANT_HELP)
     end
+    if item.confirm ~= nil then
+        if type(item.confirm) ~= "table" then
+            error(prefix .. " confirm must be a table")
+        end
+        for _, key in ipairs({ "title", "message", "confirmLabel", "cancelLabel" }) do
+            if item.confirm[key] ~= nil and type(item.confirm[key]) ~= "string" then
+                error(prefix .. " confirm." .. key .. " must be a string")
+            end
+        end
+        if item.confirm.variant ~= nil and Button.NormalizeVariant(item.confirm.variant) == nil then
+            error(prefix .. " confirm.variant must be " .. VARIANT_HELP)
+        end
+        if item.onClick == nil then
+            error(prefix .. " confirm requires onClick (runs after Confirm)")
+        end
+    end
 end
 
 function Button.build(ctx)
@@ -137,7 +154,11 @@ end
 --- Fire onClick. Shared by IsPressed poll and LMB-latch pollClick.
 local function FireClick(ctrl, ctx)
     ctx.Input.SuppressPressEdge(ctrl)
-    ctx.SafeCall(ctrl.item.onClick)
+    if ctrl.item.confirm ~= nil and ctx.ShowConfirm ~= nil then
+        ctx.ShowConfirm(ctrl.item)
+    else
+        ctx.SafeCall(ctrl.item.onClick)
+    end
     ctx.ReclaimMenuInput()
     ctx.Input.IgnoreClicks(2)
     -- Reclaim touches PlayerController / SetInputMode — must stay on the game thread.
