@@ -84,6 +84,7 @@ end
 
 function M.Poll(S, ctrl)
     if Input.WidgetPressedEdge(ctrl, ctrl.widget) then
+        Input.DebugClick("press-edge", ctrl, ctrl.widget)
         M.Flip(S)
         InputMode.Reclaim()
         Input.IgnoreClicks(2)
@@ -95,6 +96,7 @@ function M.PollClick(S, ctrl)
     if not Input.WidgetHovered(ctrl.widget) then
         return false
     end
+    Input.DebugClick("latch-hover", ctrl, ctrl.widget)
     Input.SuppressPressEdge(ctrl)
     M.Flip(S)
     InputMode.Reclaim()

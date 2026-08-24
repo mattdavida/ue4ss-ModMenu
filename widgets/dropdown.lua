@@ -159,6 +159,9 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
         if headerBtn.SetClickMethod then
             headerBtn:SetClickMethod(1)
         end
+        if headerBtn.SetTouchMethod then
+            headerBtn:SetTouchMethod(1)
+        end
     end)
     local headerRow = Umg.Construct("/Script/UMG.HorizontalBox", headerBtn, namePrefix .. "_HeaderRow")
 
@@ -218,17 +221,6 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
     end)
     local scrollBox = Umg.Construct("/Script/UMG.ScrollBox", sizeBox, namePrefix .. "_Scroll")
     pcall(function()
-        scrollBox:SetAnimateWheelScrolling(true)
-        scrollBox:SetAlwaysShowScrollbar(true)
-        scrollBox:SetAllowOverscroll(false)
-        if scrollBox.SetConsumeMouseWheel then
-            scrollBox:SetConsumeMouseWheel(1)
-        end
-        if scrollBox.SetScrollbarThickness then
-            scrollBox:SetScrollbarThickness({ X = 8, Y = 8 })
-        end
-    end)
-    pcall(function()
         sizeBox:SetContent(scrollBox)
     end)
 
@@ -236,6 +228,7 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
     pcall(function()
         scrollBox:AddChild(listBox)
     end)
+    Umg.StyleScrollBox(scrollBox, config)
     optionsBox:AddChildToVerticalBox(sizeBox)
 
     local moreLabel = nil
@@ -374,7 +367,9 @@ function Dropdown.build(ctx)
     })
 end
 
-local function SelectOption(ctrl, ctx, row)
+---@param path string
+local function SelectOption(ctrl, ctx, row, path)
+    Input.DebugClick(path, ctrl, row.button)
     local value = row.optValue
     ctrl.selectedValue = value
     ctrl.selectedLabel = tostring(row.optLabel or value)
@@ -388,10 +383,12 @@ local function SelectOption(ctrl, ctx, row)
     ctx.EnsureMenuVisible()
 end
 
-local function ToggleHeader(ctrl, ctx)
+---@param path string
+local function ToggleHeader(ctrl, ctx, path)
     if Input.WidgetHovered(ctrl.searchBox) then
         return false
     end
+    Input.DebugClick(path, ctrl, ctrl.headerBtn)
     local nextExpanded = not ctrl.expanded
     if nextExpanded then
         Dropdown.collapseAll(ctx.liveControls, ctrl)
@@ -418,13 +415,13 @@ function Dropdown.poll(ctrl, ctx)
     if ctrl.expanded and ctrl.optionRows then
         for _, row in ipairs(ctrl.optionRows) do
             if Input.WidgetPressedEdge(row, row.button) then
-                SelectOption(ctrl, ctx, row)
+                SelectOption(ctrl, ctx, row, "press-edge")
                 return
             end
         end
     end
     if Input.WidgetPressedEdge(ctrl, ctrl.headerBtn, "headerWasPressed") then
-        ToggleHeader(ctrl, ctx)
+        ToggleHeader(ctrl, ctx, "press-edge")
     end
 end
 
@@ -435,7 +432,7 @@ function Dropdown.pollOptionClick(ctrl, ctx)
     end
     for _, row in ipairs(ctrl.optionRows) do
         if Input.WidgetHovered(row.button) then
-            SelectOption(ctrl, ctx, row)
+            SelectOption(ctrl, ctx, row, "latch-hover")
             return true
         end
     end
@@ -447,7 +444,7 @@ function Dropdown.pollHeaderClick(ctrl, ctx)
     if not (Input.WidgetHovered(ctrl.headerBtn) or Input.WidgetHovered(ctrl.headerLabel)) then
         return false
     end
-    return ToggleHeader(ctrl, ctx)
+    return ToggleHeader(ctrl, ctx, "latch-hover")
 end
 
 --- LMB latch: option rows first, then header.

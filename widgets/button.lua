@@ -152,7 +152,9 @@ function Button.build(ctx)
 end
 
 --- Fire onClick. Shared by IsPressed poll and LMB-latch pollClick.
-local function FireClick(ctrl, ctx)
+---@param path string
+local function FireClick(ctrl, ctx, path)
+    ctx.Input.DebugClick(path, ctrl, ctrl.widget)
     ctx.Input.SuppressPressEdge(ctrl)
     if ctrl.item.confirm ~= nil and ctx.ShowConfirm ~= nil then
         ctx.ShowConfirm(ctrl.item)
@@ -174,7 +176,7 @@ function Button.poll(ctrl, ctx)
         return
     end
     if ctx.Input.WidgetPressedEdge(ctrl, ctrl.widget) then
-        FireClick(ctrl, ctx)
+        FireClick(ctrl, ctx, "press-edge")
     end
 end
 
@@ -186,7 +188,7 @@ function Button.pollClick(ctrl, ctx)
     if not ctx.Input.WidgetHovered(ctrl.widget) then
         return false
     end
-    return FireClick(ctrl, ctx)
+    return FireClick(ctrl, ctx, "latch-hover")
 end
 
 return Button

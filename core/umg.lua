@@ -26,6 +26,97 @@ local function Colors()
     return defaults.colors or Theme.Preset("light")
 end
 
+local lastScrollDebug = nil
+
+--- Desktop: 8px. Touch: fat always-on track (finger). Drag-on-content is later —
+--- MouseDown buttons steal the pointer, so the thumb has to be hittable.
+--- Each setter is its own pcall: one failed UFunction must not skip thickness.
+---@param scroll any
+---@param config table|nil
+function M.StyleScrollBox(scroll, config)
+    if scroll == nil then
+        return
+    end
+    local touch = config ~= nil and config.pointerMode == "touch"
+    local thick = 8
+    if touch then
+        thick = 28
+    end
+    pcall(function()
+        scroll:SetAnimateWheelScrolling(true)
+    end)
+    pcall(function()
+        scroll:SetAlwaysShowScrollbar(touch == true)
+    end)
+    pcall(function()
+        scroll:SetAllowOverscroll(touch == true)
+    end)
+    pcall(function()
+        scroll:SetConsumeMouseWheel(1)
+    end)
+    pcall(function()
+        if touch then
+            scroll:SetAlwaysShowScrollbarTrack(true)
+        end
+    end)
+
+    local vec = { X = thick, Y = thick }
+    local applied = false
+    if pcall(function()
+        scroll:SetScrollbarThickness(vec)
+    end) then
+        applied = true
+    elseif pcall(function()
+        scroll.ScrollbarThickness = vec
+    end) then
+        applied = true
+    elseif pcall(function()
+        scroll.ScrollbarThickness.X = thick
+        scroll.ScrollbarThickness.Y = thick
+    end) then
+        applied = true
+    end
+
+    -- FScrollBarStyle brushes often control how wide the thumb looks.
+    pcall(function()
+        local style = scroll.WidgetBarStyle
+        if style == nil then
+            return
+        end
+        local size = { X = thick, Y = thick }
+        for _, key in ipairs({
+            "VerticalBackgroundImage",
+            "HorizontalBackgroundImage",
+            "NormalThumbImage",
+            "HoveredThumbImage",
+            "DraggedThumbImage",
+        }) do
+            local brush = style[key]
+            if brush ~= nil then
+                pcall(function()
+                    brush.ImageSize = size
+                end)
+            end
+        end
+        scroll.WidgetBarStyle = style
+    end)
+
+    pcall(function()
+        scroll:SynchronizeProperties()
+    end)
+
+    local msg = string.format(
+        "scroll thick=%d touch=%s thicknessSet=%s",
+        thick,
+        touch and "1" or "0",
+        applied and "1" or "0"
+    )
+    if msg ~= lastScrollDebug then
+        lastScrollDebug = msg
+        Util.Debug(msg)
+    end
+end
+
 local function FindClass(path)
     local cls = StaticFindObject(path)
     if not Util.IsValid(cls) then
@@ -295,9 +386,13 @@ function M.CreateTextButton(outer, namePrefix, caption, bgColor, textColor, font
     pcall(function()
         button:SetContent(label)
         button:SetBackgroundColor(bgColor or Colors().buttonBg)
-        -- MouseDown: pressed state as soon as the pointer goes down (helps IsPressed poll).
+        -- MouseDown / touch-down so IsPressed is true on pointer-down
+        -- (DownAndUp misses short taps).
         if button.SetClickMethod then
             button:SetClickMethod(1)
+        end
+        if button.SetTouchMethod then
+            button:SetTouchMethod(1)
         end
     end)
     return button, label

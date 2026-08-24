@@ -92,7 +92,8 @@ ModMenu.Init({
     dock = "left", -- "left" | "right"
     -- theme = "dark", -- charcoal panel; omit for the current ("light") look
     -- tabs = { "Cheats", "Give", "Keybinds" }, -- omit = single scroll
-    -- debug = true, -- verbose [ModMenu] traces (open/close, collapse, register)
+    -- debug = true, -- verbose [ModMenu] traces (open/close, collapse, register, click path)
+    -- pointerMode = "touch", -- Ally: checkbox as tap buttons; ignore late LMB latch
     -- inputBackend = "engine", -- opt-in when RegisterKeyBind does not fire
     -- consoleCommand = "modmenu",
     -- cursorMode = "modmenu", -- overlay pointer when the game hides the engine cursor
@@ -195,8 +196,9 @@ Configure and bind this mod’s shell. Safe to call more than once (updates conf
 | `widthFrac` | `0.32` | Panel width as % of viewport |
 | `topFrac` / `bottomFrac` | `0.05` | Vertical margins |
 | `rightFrac` | `0.01` | Edge margin (both docks) |
-| `fontScale` | `1` | Multiplies the default font sizes (same idea as UE4SS `GuiConsoleFontScaling`). Prefer this for per-game tuning. Explicit `fontTitle` / … still win and are not scaled. |
+| `fontScale` | `1` | Multiplies the default font sizes (same idea as UE4SS `GuiConsoleFontScaling`). Prefer this for per-game **desktop** tuning. Explicit `fontTitle` / … still win and are not scaled by this. |
 | `fontTitle` / `fontHint` / `fontItem` / `fontSection` / `fontDropdown` | 22 / 14 / 16 / 18 / 15 | Optional absolute sizes. Omit and use `fontScale` unless one role needs a one-off size. `fontDropdown` is header + option rows. |
+| `touchFontScale` | `1.75` | Used only when `pointerMode` is `"touch"`. Multiplies resolved fonts **and** desktop `widthFrac` (0.32 → ~0.56, cap 0.85). Mortal Shell 2 `fontItem = 10` becomes 18. Not stacked across later `Init` calls. |
 | `theme` | `"light"` | Author preset. `"light"` is the current look (navy panel, light fields). `"dark"` is charcoal panel, dark fields, teal/gold tokens. Not a player setting. |
 | `colors` | from `theme` | Optional overrides: `{ panelBg = { R, G, B, A }, ... }`. Merged onto the preset. See **Theming**. |
 | `tabs` | `nil` | Optional `{ "Cheats", "Give", ... }`. Adds a tab strip; only the active tab's sections are built. Omit = current single-scroll menu. Duplicate / empty names error. |
@@ -205,7 +207,8 @@ Configure and bind this mod’s shell. Safe to call more than once (updates conf
 | `cursorMode` | `"engine"` | `"engine"` (PlayerController / GameAndUI cursor only) or `"modmenu"` (opt-in HitTestInvisible overlay pointer above the shell). Use when the game suppresses the engine cursor. A later `Init` that changes this (or `cursorScale` / `cursorHideClasses`) rebuilds the overlay if it already exists. |
 | `cursorScale` | `1` | Overlay pointer multiplier (`1`–`8`). The glyph is the Windows arrow (~28×46) with a 1px outline + drop shadow. `2` if you want it larger. Only used when `cursorMode = "modmenu"`. Live `Init` updates rebuild the overlay. |
 | `cursorHideClasses` | `nil` | Optional string array of UUserWidget class short names to collapse while the ModMenu cursor is shown (e.g. `{ "WB_Cursor_C" }`). Host-supplied; empty by default. Class defaults (`Default__…`) are skipped. On close, each widget is restored to the visibility it had before hide — not forced visible. |
-| `debug` | `false` | Verbose `[ModMenu]` traces (open/close, collapse, register). Failures always print. |
+| `debug` | `false` | Verbose `[ModMenu]` traces (open/close, collapse, register, click routing). Failures always print. |
+| `pointerMode` | `"mouse"` | `"mouse"` (default) or `"touch"` / `"handheld"` (same). Touch: ignore delayed LMB latch; checkbox ON/OFF buttons; fonts + panel width × `touchFontScale`; 28px scrollbar; 56px-tall tab strip with extra gap under Dock. Hosts keep `{ type = "checkbox" }` and desktop `font*` / `widthFrac`. |
 
 Also installs viewport hooks and the input backend (`core/input.lua`): toggle + LMB click latch. Default `ue4ss` uses `RegisterKeyBind`. Pass `inputBackend = "engine"` on games where those binds never fire (e.g. Code Vein 2); that polls Unreal `IsInputKeyDown` for the toggle key and left mouse.
 
@@ -726,17 +729,17 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 
 1. **Per-mod shell** — each Lua mod has its own ModMenu state (`require` is not shared across mods). Multiple mods may each `Init` an independent panel. UObject roots are named `ModMenu_Root_<instanceId>_<n>` using a `ModRef` serial (`ModMenu.NextInstanceId`) so they never collide under `GameInstance`.
 2. **Toggle keys** — prefer a unique `key` / `keyHint` per mod. Claims are stored as `ModMenu.KeyClaim.<keyHint>`; clashes log **KEY CONFLICT**. On the `ue4ss` backend, UE4SS may fire every binder on that key (both menus toggle — useful for same-author dual docks, confusing for unrelated mods). On `engine`, each shell polls independently.
-3. **Input** — while open, uses GameAndUI + mouse cursor. Buttons / dock / dropdowns fire from `UButton:IsPressed()` (rising edge, 16ms poll) plus the LMB latch + `IsHovered()` fallback. Checkboxes poll persistent `IsChecked()` and do not need either. The toggle key uses `Init inputBackend`: `ue4ss` (`RegisterKeyBind`) or `engine` (poll `IsInputKeyDown`). PlayerController often does **not** see LMB while Slate owns the mouse, so engine-backend menus must not rely on the LMB latch alone. Closing one menu does not force GameOnly while another ModMenu is still open (`ModMenu.OpenCount`). `ClientRestart` / `DestroyShell` do not touch input unless this instance had the menu open. On close, `GameOnly` is applied only if the game had no cursor when we opened (mouse-look); hub/inventory cursors are left alone. Camera look is **not** locked unless `Init({ ignoreLook = true })`. When the engine cursor is suppressed, opt in with `cursorMode = "modmenu"` for a HitTestInvisible overlay pointer (`core/cursor.lua`); optionally pass `cursorHideClasses` to collapse game cursor widgets while open (class defaults are skipped; prior visibility is restored on close). Overlay mode does not treat a hidden engine cursor as stolen (that would re-apply GameAndUI every tick and break checkboxes / text fields). A later `Init` that changes `cursorMode` / `cursorScale` / `cursorHideClasses` rebuilds the overlay if it already exists.
+3. **Input** — while open, uses GameAndUI + mouse cursor. Buttons / dock / dropdowns fire from `UButton:IsPressed()` (rising edge, 16ms poll) plus the LMB latch + `IsHovered()` fallback (touch also keeps the last hovered widget briefly and retries an unclaimed latch). Desktop checkboxes poll persistent `IsChecked()`. `pointerMode = "touch"` renders checkboxes as ON/OFF buttons so a finger tap uses the same press-edge path. The toggle key uses `Init inputBackend`: `ue4ss` (`RegisterKeyBind`) or `engine` (poll `IsInputKeyDown`). PlayerController often does **not** see LMB while Slate owns the mouse, so engine-backend menus must not rely on the LMB latch alone. Closing one menu does not force GameOnly while another ModMenu is still open (`ModMenu.OpenCount`). `ClientRestart` / `DestroyShell` do not touch input unless this instance had the menu open. On close, `GameOnly` is applied only if the game had no cursor when we opened (mouse-look); hub/inventory cursors are left alone. Camera look is **not** locked unless `Init({ ignoreLook = true })`. When the engine cursor is suppressed, opt in with `cursorMode = "modmenu"` for a HitTestInvisible overlay pointer (`core/cursor.lua`); optionally pass `cursorHideClasses` to collapse game cursor widgets while open (class defaults are skipped; prior visibility is restored on close). Overlay mode does not treat a hidden engine cursor as stolen (that would re-apply GameAndUI every tick and break checkboxes / text fields). A later `Init` that changes `cursorMode` / `cursorScale` / `cursorHideClasses` rebuilds the overlay if it already exists.
 4. **Dock** — left/right presets only (header button + `SetDock`). No free drag. Session only (not saved to disk).
 5. **Scroll** — the docked panel is a fixed viewport; section content lives in a ScrollBox (mouse wheel). Use `labelWidth` on `number` / `textinput` so amount rows line up like a table.
 6. **FNames** — shell names include `instanceId`; content rebuilds bump an internal generation after `ClearChildren`. Collapse / fold expand/collapse show/hide a body and do not rebuild. Prefer `SetOptions` on searchable lists over constant full rebuilds. Menu close/open keeps the UMG tree (no rebuild) so large sections (Give, keybinds) do not respawn on every toggle. `Register` / non-searchable `SetOptions` rebuild **while the menu is open**, and mark the tree dirty if they run while it is closed so the next `Open` rebuilds. `ClientRestart` destroys the shell and restores it if it was open.
 7. **Large lists** — keep `maxVisible` bounded; filter narrows the working set. Building thousands of UButtons at once is risky.
 8. **Game readiness** — many game objects only exist after a save is loaded; surface that in a status `label` and/or `OnOpen` retry.
 9. **Callbacks** — errors inside `onClick` / `onChange` are caught and logged as `[ModMenu] callback error: ...`.
-10. **Logging** — quiet by default. Failures still print (`CreateShell failed`, `KEY CONFLICT`, `OPEN blocked`). `Init({ debug = true })` restores open/close, collapse, and register traces.
+10. **Logging** — quiet by default. Failures still print (`CreateShell failed`, `KEY CONFLICT`, `OPEN blocked`). `Init({ debug = true })` restores open/close, collapse, register, scrollbar, and click-path traces (`press-edge` / `latch-hover` / `latch-miss`). Click traces include `hover` / `pressed` / `capture` / `downVia` / `ptr`. On a handheld, `downVia=capture` is the touch signature — see **Ally / handheld**.
 11. **Hot-reload** — `ModRef` shared vars (`NextInstanceId`, key claims, open count) are **not** cleared on Ctrl+R.
 12. **Collapse** — opt-in (`collapsible = true`). Accordion header: title on the left, `+` (closed) / `-` (open) on the right. Toggle show/hides the section body (same as dropdowns; no content rebuild). Session-only per section `id` (survives close/open; not written to disk). Re-Register keeps the current open/closed state. Nested groups use `type = "fold"` inside `items` — same session memory per `sectionId.foldId` (see **Item types**).
-13. **Tabs** — opt-in (`Init({ tabs = { ... } })`). Strip under title / dock. Only the active tab's sections are constructed; switching rebuilds that body (not a hidden full tree). `Register({ tab = "Give" })`; omit `tab` = first name. `Get` / `Set` still work for hidden tabs. Session remembers the last tab (not disk). Keyboard Q/E is not in v1.
+13. **Tabs** — opt-in (`Init({ tabs = { ... } })`). Strip under title / dock. Only the active tab's sections are constructed; switching rebuilds that body (not a hidden full tree). `Register({ tab = "Give" })`; omit `tab` = first name. `Get` / `Set` still work for hidden tabs. Session remembers the last tab (not disk). Keyboard Q/E is not in v1. `pointerMode = "touch"` makes the strip 56px tall with extra gap under Dock (desktop unchanged).
 
 ### Known limits
 
@@ -744,6 +747,19 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 - **Wuchang:** close the menu before death or area load. `ClientRestart` with the shell open fatals in that title only (not cursor-related). Other games restore an already-open menu.
 - No free-drag, CommonUI, or designer-authored WBP — dock presets + constructed UMG only.
 - Camera look is **not** locked unless `Init({ ignoreLook = true })`.
+
+### Ally / handheld
+
+Windows touch is a fake mouse. Hosts that want handheld layout opt in (desktop stays `pointerMode = "mouse"`):
+
+```lua
+ModMenu.Init({
+    pointerMode = "touch", -- or "handheld"
+    -- debug = true, -- optional: click-path traces
+})
+```
+
+Touch mode: checkboxes are ON/OFF buttons (`press-edge`); delayed LMB latch ignored; fonts and `widthFrac` × `touchFontScale` (default 1.75); ScrollBox thumb is 28px and always shown so it is hittable (content-drag is a later pass — buttons capture the pointer). A **Close** button sits on the right of the title row so you can dismiss the menu without opening the on-screen keyboard for the toggle key. The tab strip uses 56px-tall buttons and extra gap under Dock so a finger aiming for Cheats / Give does not hit Dock Left/Right. Desktop tabs stay compact.
 
 ---
 

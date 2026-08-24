@@ -124,6 +124,9 @@ function Fold.build(ctx)
         if headerBtn.SetClickMethod then
             headerBtn:SetClickMethod(1)
         end
+        if headerBtn.SetTouchMethod then
+            headerBtn:SetTouchMethod(1)
+        end
     end)
 
     local headerRow = umg.Construct("/Script/UMG.HorizontalBox", headerBtn, namePrefix .. "_HdrRow")
@@ -207,6 +210,7 @@ end
 
 function Fold.poll(ctrl, ctx)
     if ctx.Input.WidgetPressedEdge(ctrl, ctrl.widget) then
+        ctx.Input.DebugClick("press-edge", ctrl, ctrl.widget)
         Toggle(ctrl, ctx)
     end
 end
@@ -215,6 +219,7 @@ function Fold.pollClick(ctrl, ctx)
     if not ctx.Input.WidgetHovered(ctrl.widget) then
         return false
     end
+    ctx.Input.DebugClick("latch-hover", ctrl, ctrl.widget)
     Toggle(ctrl, ctx)
     return true
 end

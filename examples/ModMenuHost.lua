@@ -25,6 +25,8 @@ ModMenu.Init({
     fontItem = 10,
     fontHint = 8,
     fontDropdown = 9,
+    -- debug = true, -- verbose [ModMenu] traces (open/close, collapse, register, click path)
+    -- pointerMode = "touch", -- handheld: tap checkboxes; eat delayed latch after press-edge
 })
 
 local flipDanger = false

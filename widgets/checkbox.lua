@@ -1,6 +1,12 @@
 --[[
   ModMenu widget: checkbox
+
+  Desktop: native UCheckBox, poll IsChecked().
+  pointerMode = "touch": UButton toggle (same onChange(bool)). Native UCheckBox
+  on a handheld needs a cursor + A; constructed buttons fire press-edge from a tap.
 ]]
+
+local Button = require("ModMenu.widgets.button")
 
 local Checkbox = {}
 Checkbox.type = "checkbox"
@@ -13,6 +19,25 @@ local function Caption(item, isOn)
 end
 
 Checkbox.Caption = Caption
+
+local function UseTouchButton(ctx)
+    return ctx ~= nil and ctx.Input ~= nil and ctx.Input.IsTouch and ctx.Input.IsTouch()
+end
+
+local function PaintToggle(ctrl, ctx, isOn)
+    ctrl.paintItem = {
+        active = isOn == true,
+        enabled = true,
+        variant = "default",
+    }
+    local paint = {
+        kind = "checkbox",
+        widget = ctrl.widget,
+        labelWidget = ctrl.label or ctrl.labelWidget,
+        item = ctrl.paintItem,
+    }
+    Button.applyChrome(paint, ctx)
+end
 
 function Checkbox.validate(item, sectionId, index)
     local prefix = string.format("Register(%s) items[%d]", tostring(sectionId), index)
@@ -46,27 +71,61 @@ function Checkbox.build(ctx)
         current = item.default and true or false
         ctx.values[vkey] = current
     end
-    local check, label = umg.CreateLabeledToggle(
-        ctx.contentBox,
-        ctx.namePrefix,
-        Caption(item, current),
-        current
-    )
-    umg.AddToContent(ctx, check)
+
+    local asButton = UseTouchButton(ctx)
+    local widget
+    local label
+    if asButton then
+        widget, label = umg.CreateTextButton(ctx.contentBox, ctx.namePrefix, Caption(item, current))
+    else
+        widget, label = umg.CreateLabeledToggle(
+            ctx.contentBox,
+            ctx.namePrefix,
+            Caption(item, current),
+            current
+        )
+    end
+    umg.AddToContent(ctx, widget)
     umg.AddItemPad(ctx, ctx.namePrefix .. "_Pad", 8)
-    table.insert(ctx.liveControls, {
+    local ctrl = {
         kind = "checkbox",
         sectionId = ctx.section.id,
         item = item,
-        widget = check,
+        widget = widget,
         label = label,
+        labelWidget = label,
         valueKey = vkey,
-    })
+        asButton = asButton,
+        wasPressed = false,
+    }
+    if asButton then
+        PaintToggle(ctrl, ctx, current)
+    end
+    table.insert(ctx.liveControls, ctrl)
 end
 
---- Continuous state poll (not LMB latch).
+local function FireToggle(ctrl, ctx, path)
+    local nextOn = not (ctx.values[ctrl.valueKey] == true)
+    ctx.values[ctrl.valueKey] = nextOn
+    ctx.umg.SetLabelText(ctrl.label, Caption(ctrl.item, nextOn))
+    PaintToggle(ctrl, ctx, nextOn)
+    ctx.Input.DebugClick(path, ctrl, ctrl.widget)
+    ctx.Input.SuppressPressEdge(ctrl)
+    ctx.SafeCall(ctrl.item.onChange, nextOn)
+    ctx.ReclaimMenuInput()
+    ctx.Input.IgnoreClicks(2)
+    return true
+end
+
+--- Native box: IsChecked. Touch button: IsPressed rising edge.
 function Checkbox.poll(ctrl, ctx)
     if not ctx.IsValid(ctrl.widget) then
+        return
+    end
+    if ctrl.asButton then
+        if ctx.Input.WidgetPressedEdge(ctrl, ctrl.widget) then
+            FireToggle(ctrl, ctx, "press-edge")
+        end
         return
     end
     local ok, checked = pcall(function()
@@ -80,11 +139,26 @@ function Checkbox.poll(ctrl, ctx)
     end
 end
 
+function Checkbox.pollClick(ctrl, ctx)
+    if not ctrl.asButton then
+        return false
+    end
+    if not ctx.Input.WidgetHovered(ctrl.widget) then
+        return false
+    end
+    return FireToggle(ctrl, ctx, "latch-hover")
+end
+
 function Checkbox.apply(ctrl, value, ctx)
     if not ctx.IsValid(ctrl.widget) then
         return
     end
     local on = value and true or false
+    if ctrl.asButton then
+        ctx.umg.SetLabelText(ctrl.label, Caption(ctrl.item, on))
+        PaintToggle(ctrl, ctx, on)
+        return
+    end
     pcall(function()
         ctrl.widget:SetIsChecked(on)
     end)
