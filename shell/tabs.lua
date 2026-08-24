@@ -81,6 +81,11 @@ function M.SectionVisible(S, section)
     return section ~= nil and section.tab == S.activeTab
 end
 
+-- Finger-sized tab targets (desktop stays compact, text-height buttons).
+local TOUCH_TAB_MIN_H = 56
+local TOUCH_TAB_GAP = 8
+local TOUCH_TAB_PAD = 12
+
 --- Horizontal tab buttons under title / dock. Fill-width so three names share the row.
 function M.BuildStrip(S, contentBox, suffix)
     M.Ensure(S)
@@ -88,6 +93,7 @@ function M.BuildStrip(S, contentBox, suffix)
         return
     end
     local colors = Theme.Of(S.config)
+    local touch = S.config.pointerMode == "touch"
     local row = Construct("/Script/UMG.HorizontalBox", contentBox, "ModMenu_Tabs_" .. suffix)
     contentBox:AddChildToVerticalBox(row)
 
@@ -95,19 +101,44 @@ function M.BuildStrip(S, contentBox, suffix)
         local active = name == S.activeTab
         local bg = active and colors.buttonBgActive or colors.buttonBg
         local fg = active and colors.buttonTextActive or colors.buttonText
+        local host = row
+        local size = nil
+        if touch then
+            size = Construct("/Script/UMG.SizeBox", row, "ModMenu_TabSize" .. tostring(i) .. "_" .. suffix)
+            pcall(function()
+                size:SetMinDesiredHeight(TOUCH_TAB_MIN_H)
+            end)
+            host = size
+        end
         local btn, lbl = CreateTextButton(
-            row,
+            host,
             "ModMenu_Tab" .. tostring(i) .. "_" .. suffix,
             name,
             bg,
             fg,
             S.config.fontItem
         )
-        local slot = row:AddChildToHorizontalBox(btn)
+        if size ~= nil then
+            -- Button must fill the SizeBox or the extra height is not hittable.
+            local contentSlot
+            pcall(function()
+                contentSlot = size:SetContent(btn)
+            end)
+            pcall(function()
+                if contentSlot ~= nil then
+                    contentSlot:SetHorizontalAlignment(0) -- Fill
+                    contentSlot:SetVerticalAlignment(0)
+                end
+            end)
+            pcall(function()
+                btn:SetPadding({ Left = 8, Top = 12, Right = 8, Bottom = 12 })
+            end)
+        end
+        local slot = row:AddChildToHorizontalBox(size or btn)
         pcall(function()
             slot:SetSize({ SizeRule = 1, Value = 1.0 })
             slot:SetPadding({
-                Left = (i == 1) and 0 or 4,
+                Left = (i == 1) and 0 or (touch and TOUCH_TAB_GAP or 4),
                 Top = 0,
                 Right = 0,
                 Bottom = 0,
@@ -122,7 +153,7 @@ function M.BuildStrip(S, contentBox, suffix)
         })
     end
 
-    AddSpacer(contentBox, "ModMenu_TabPad_" .. suffix, 8)
+    AddSpacer(contentBox, "ModMenu_TabPad_" .. suffix, touch and TOUCH_TAB_PAD or 8)
 end
 
 function M.QueueSelect(S, tabId)
@@ -217,6 +248,7 @@ end
 
 function M.Poll(S, ctrl)
     if Input.WidgetPressedEdge(ctrl, ctrl.widget) then
+        Input.DebugClick("press-edge", ctrl, ctrl.widget)
         M.QueueSelect(S, ctrl.tabId)
         InputMode.Reclaim()
         Input.IgnoreClicks(2)
@@ -228,6 +260,7 @@ function M.PollClick(S, ctrl)
     if not Input.WidgetHovered(ctrl.widget) then
         return false
     end
+    Input.DebugClick("latch-hover", ctrl, ctrl.widget)
     Input.SuppressPressEdge(ctrl)
     M.QueueSelect(S, ctrl.tabId)
     InputMode.Reclaim()

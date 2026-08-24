@@ -296,6 +296,7 @@ function M.Poll(S)
     local fired = nil
     for _, ctrl in ipairs(S.confirmControls or {}) do
         if Input.WidgetPressedEdge(ctrl, ctrl.widget) then
+            Input.DebugClick("press-edge", ctrl, ctrl.widget)
             fired = ctrl.role
             Input.SuppressPressEdge(ctrl)
             break
@@ -303,12 +304,18 @@ function M.Poll(S)
     end
 
     if Input.ConsumeMouseClick() and fired == nil then
+        local latchHit = false
         for _, ctrl in ipairs(S.confirmControls or {}) do
             if Input.WidgetHovered(ctrl.widget) then
+                Input.DebugClick("latch-hover", ctrl, ctrl.widget)
                 fired = ctrl.role
                 Input.SuppressPressEdge(ctrl)
+                latchHit = true
                 break
             end
+        end
+        if not latchHit then
+            Input.DebugClick("latch-miss", { kind = "confirm" }, nil)
         end
     end
 

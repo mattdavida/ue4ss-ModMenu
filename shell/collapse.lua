@@ -109,7 +109,7 @@ end
 
 function M.Poll(S, ctrl)
     if Input.WidgetPressedEdge(ctrl, ctrl.widget) then
-        Debug(string.format("collapse press-edge id=%s", tostring(ctrl.sectionId)))
+        Input.DebugClick("press-edge", ctrl, ctrl.widget)
         Input.SuppressPressEdge(ctrl)
         Input.IgnoreClicks(2)
         M.QueueToggle(S, ctrl.sectionId, "press")
@@ -121,7 +121,7 @@ function M.PollClick(S, ctrl)
     if not Input.WidgetHovered(ctrl.widget) then
         return false
     end
-    Debug(string.format("collapse latch id=%s", tostring(ctrl.sectionId)))
+    Input.DebugClick("latch-hover", ctrl, ctrl.widget)
     Input.SuppressPressEdge(ctrl)
     Input.IgnoreClicks(2)
     M.QueueToggle(S, ctrl.sectionId, "latch")

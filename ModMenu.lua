@@ -6,6 +6,7 @@
     ModMenu.Init({ title = "My Mod Menu", key = Key.F6 }) -- ignoreLook = true to lock camera
     -- inputBackend = "engine" when RegisterKeyBind does not fire (e.g. Code Vein 2)
     -- cursorMode = "modmenu" when the game suppresses the engine cursor
+    -- pointerMode = "touch" on handheld (checkbox buttons + ignore delayed latch)
     ModMenu.Register({
       id = "MyMod",
       title = "My Mod",
@@ -128,6 +129,7 @@ local function InstallInput()
         config.keyName = tostring(config.keyHint or "F6")
     end
     Instance.ClaimToggleKey(config, config.keyHint or tostring(key))
+    Input.SetPointerMode(config.pointerMode)
     Input.Install({
         backend = config.inputBackend,
         key = key,
@@ -167,15 +169,19 @@ function ModMenu.Init(opts)
         tabList = table.concat(config.tabs, ",")
     end
     Debug(string.format(
-        "Init — title=%q key=%s backend=%s cursor=%s dock=%s theme=%s tabs=%s fontScale=%s instance=%q serial=%s z=%d",
+        "Init — title=%q key=%s backend=%s cursor=%s pointer=%s dock=%s theme=%s tabs=%s fontScale=%s touchFont=%s fontItem=%s widthFrac=%.2f instance=%q serial=%s z=%d",
         tostring(config.title),
         tostring(config.keyHint or config.key),
         tostring(config.inputBackend),
         tostring(config.cursorMode),
+        tostring(config.pointerMode),
         tostring(config.dock),
         tostring(config.theme),
         tabList,
         tostring(config.fontScale),
+        tostring(config.touchFontScale),
+        tostring(config.fontItem),
+        config.widthFrac or 0,
         tostring(Instance.GetTag()),
         tostring(Instance.GetSerial()),
         Instance.GetViewportZ()

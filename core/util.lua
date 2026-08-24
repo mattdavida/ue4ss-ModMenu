@@ -24,11 +24,15 @@ function M.SetDebug(on)
     debugOn = on == true
 end
 
+function M.IsDebug()
+    return debugOn == true
+end
+
 function M.Log(msg)
     print(string.format("[%s] %s\n", LIB_NAME, tostring(msg)))
 end
 
---- Verbose traces (collapse, open/close, section register). Off by default.
+--- Verbose traces (collapse, open/close, section register, click path). Off by default.
 function M.Debug(msg)
     if debugOn then
         M.Log(msg)

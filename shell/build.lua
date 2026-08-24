@@ -45,10 +45,39 @@ function M.BuildContent(S)
     local config = S.config
     local contentBox = S.contentBox
 
-    local title = Construct("/Script/UMG.TextBlock", contentBox, "ModMenu_Title_" .. suffix)
+    local titleRow = Construct("/Script/UMG.HorizontalBox", contentBox, "ModMenu_TitleRow_" .. suffix)
+    contentBox:AddChildToVerticalBox(titleRow)
+
+    local title = Construct("/Script/UMG.TextBlock", titleRow, "ModMenu_Title_" .. suffix)
     StyleText(title, config.fontTitle)
     SetLabelText(title, config.title)
-    contentBox:AddChildToVerticalBox(title)
+    local titleSlot = titleRow:AddChildToHorizontalBox(title)
+    pcall(function()
+        titleSlot:SetSize({ SizeRule = 1, Value = 1.0 })
+        titleSlot:SetVerticalAlignment(2)
+    end)
+
+    -- Handheld: tap Close instead of opening the OSK for F6.
+    if config.pointerMode == "touch" then
+        local closeBtn, closeLbl = CreateTextButton(
+            titleRow,
+            "ModMenu_Close_" .. suffix,
+            "Close"
+        )
+        local closeSlot = titleRow:AddChildToHorizontalBox(closeBtn)
+        pcall(function()
+            closeSlot:SetSize({ SizeRule = 0, Value = 0.0 })
+            closeSlot:SetPadding({ Left = 8, Top = 0, Right = 0, Bottom = 0 })
+            closeSlot:SetVerticalAlignment(2)
+        end)
+        table.insert(S.liveControls, {
+            kind = "close",
+            widget = closeBtn,
+            label = closeLbl,
+            role = "close",
+            wasPressed = false,
+        })
+    end
 
     local keyName = tostring(config.keyHint or config.keyName or "F6")
     local hintText = "[" .. keyName .. "] toggle menu"
@@ -67,7 +96,12 @@ function M.BuildContent(S)
         Dock.Caption(config)
     )
     contentBox:AddChildToVerticalBox(dockBtn)
-    AddSpacer(contentBox, "ModMenu_DockPad_" .. suffix, 8)
+    -- Touch: extra dead space so a high tab tap does not land on Dock.
+    local dockPad = 8
+    if config.pointerMode == "touch" then
+        dockPad = 24
+    end
+    AddSpacer(contentBox, "ModMenu_DockPad_" .. suffix, dockPad)
     table.insert(S.liveControls, {
         kind = "dock",
         widget = dockBtn,
@@ -147,6 +181,14 @@ function M.BuildContent(S)
             AddSpacer(contentBox, "ModMenu_Between_" .. section.id .. "_" .. suffix, 18)
         end
     end
+
+    -- Touch: last Combat buttons sat on the 1080p clip edge. Mouse does not
+    -- need that extra well — those clicks were landing (God hid the HP change).
+    local foot = 8
+    if config.pointerMode == "touch" then
+        foot = 120
+    end
+    AddSpacer(contentBox, "ModMenu_Foot_" .. suffix, foot)
 end
 
 function M.Teardown(S)
@@ -228,23 +270,14 @@ function M.Create(S)
 
     -- ScrollBox fills the docked panel so long section lists are reachable.
     local scroll = Construct("/Script/UMG.ScrollBox", fill, "ModMenu_Scroll_" .. suffix)
-    pcall(function()
-        scroll:SetAnimateWheelScrolling(true)
-        scroll:SetAlwaysShowScrollbar(true)
-        scroll:SetAllowOverscroll(false)
-        if scroll.SetConsumeMouseWheel then
-            scroll:SetConsumeMouseWheel(1) -- EConsumeMouseWheel::Always
-        end
-        if scroll.SetScrollbarThickness then
-            scroll:SetScrollbarThickness({ X = 8, Y = 8 })
-        end
-    end)
     fill:SetContent(scroll)
 
     local vbox = Construct("/Script/UMG.VerticalBox", scroll, "ModMenu_VBox_" .. suffix)
     pcall(function()
         scroll:AddChild(vbox)
     end)
+    -- After children: constructed ScrollBox often ignores thickness until the slot exists.
+    Umg.StyleScrollBox(scroll, config)
 
     local slot = canvas:AddChildToCanvas(outline)
     S.panelSlot = slot
@@ -256,6 +289,7 @@ function M.Create(S)
 
     hud:AddToViewport(Instance.GetViewportZ())
     hud:SetVisibility(Session.VIS_COLLAPSED)
+    Umg.StyleScrollBox(scroll, config)
 
     S.menuRoot = hud
     S.contentBox = vbox

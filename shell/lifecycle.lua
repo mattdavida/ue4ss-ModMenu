@@ -11,6 +11,7 @@ local Cursor = require("ModMenu.core.cursor")
 local Widgets = require("ModMenu.widgets.init")
 local Session = require("ModMenu.shell.session")
 local Dock = require("ModMenu.shell.dock")
+local Close = require("ModMenu.shell.close")
 local Collapse = require("ModMenu.shell.collapse")
 local Tabs = require("ModMenu.shell.tabs")
 local Build = require("ModMenu.shell.build")
@@ -43,12 +44,16 @@ local function PollControls(S)
 
     local ctx = S.makeWidgetCtx()
 
+    Input.BeginPoll(S.liveControls)
+
     -- Continuous polls (search filter, checkbox state, UButton IsPressed).
     -- pollClick is the LMB-latch fallback. Handlers must SuppressPressEdge so
     -- a latch click is not also treated as an IsPressed rising edge next tick.
     for _, ctrl in ipairs(S.liveControls) do
         if ctrl.kind == "dock" then
             Dock.Poll(S, ctrl)
+        elseif ctrl.kind == "close" then
+            Close.Poll(S, ctrl)
         elseif ctrl.kind == "collapse" then
             Collapse.Poll(S, ctrl)
         elseif ctrl.kind == "tab" then
@@ -63,24 +68,39 @@ local function PollControls(S)
 
     if Input.ConsumeMouseClick() then
         -- List order. Dropdown.pollClick does option rows then header.
+        local consumed = false
         for _, ctrl in ipairs(S.liveControls) do
             if ctrl.kind == "dock" then
                 if Dock.PollClick(S, ctrl) then
+                    consumed = true
+                    break
+                end
+            elseif ctrl.kind == "close" then
+                if Close.PollClick(S, ctrl) then
+                    consumed = true
                     break
                 end
             elseif ctrl.kind == "collapse" then
                 if Collapse.PollClick(S, ctrl) then
+                    consumed = true
                     break
                 end
             elseif ctrl.kind == "tab" then
                 if Tabs.PollClick(S, ctrl) then
+                    consumed = true
                     break
                 end
             else
                 local widget = Widgets.get(ctrl.kind)
                 if widget and widget.pollClick and widget.pollClick(ctrl, ctx) then
+                    consumed = true
                     break
                 end
+            end
+        end
+        if not consumed then
+            if not Input.RetryUnclaimedClick() then
+                Input.DebugClick("latch-miss", nil, nil)
             end
         end
     end
@@ -89,6 +109,10 @@ local function PollControls(S)
     Collapse.Flush(S)
     -- Tab rebuild is also deferred — never BuildContent under a still-down click.
     Tabs.Flush(S)
+    if S.pendingClose then
+        S.pendingClose = false
+        M.Close(S)
+    end
 end
 
 function M.StartPoll(S)

@@ -30,10 +30,12 @@ function M.New()
         keyName = nil, -- Unreal FKey name for engine backend (e.g. "F7"); defaults from keyHint
         consoleCommand = nil, -- optional console command (toggle|open|close)
         cursorMode = "engine", -- "engine" | "modmenu" (opt-in overlay pointer)
+        pointerMode = "mouse", -- "mouse" | "touch" (longer latch ignore + checkbox buttons)
+        touchFontScale = 1.75, -- extra multiply on resolved fonts + widthFrac when pointerMode is touch
         cursorScale = 1, -- overlay pointer multiplier (1 = native ~28x46; 2 = larger)
         cursorHideClasses = nil, -- optional string[] of UUserWidget class names to collapse while open
         tabs = nil, -- optional string[] top-level tabs; omit = single scroll
-        debug = false, -- verbose [ModMenu] traces (collapse, open/close, register)
+        debug = false, -- verbose [ModMenu] traces (collapse, open/close, register, click path)
     }
 end
 
@@ -63,6 +65,20 @@ function M.NormalizeCursorMode(value)
         return value
     end
     error('ModMenu.Init: cursorMode must be "engine" or "modmenu"')
+end
+
+--- "handheld" is an alias for touch (same Init line as debug).
+function M.NormalizePointerMode(value)
+    if value == nil then
+        return "mouse"
+    end
+    if value == "mouse" then
+        return "mouse"
+    end
+    if value == "touch" or value == "handheld" then
+        return "touch"
+    end
+    error('ModMenu.Init: pointerMode must be "mouse", "touch", or "handheld"')
 end
 
 function M.NormalizeCursorScale(value)
@@ -150,6 +166,24 @@ function M.NormalizeFontScale(value)
     return value
 end
 
+--- Extra size on handheld (fonts + panel width).
+function M.NormalizeTouchFontScale(value)
+    if value == nil then
+        return 1.75
+    end
+    if type(value) ~= "number" or value ~= value or value <= 0 then
+        error("ModMenu.Init: touchFontScale must be a positive number")
+    end
+    local n = value
+    if n < 1 then
+        n = 1
+    end
+    if n > 4 then
+        n = 4
+    end
+    return n
+end
+
 local function ScaleFont(base, scale)
     local n = math.floor((base * scale) + 0.5)
     if n < 1 then
@@ -160,6 +194,7 @@ end
 
 --- Scale stock sizes, then apply any explicit font* from this Init (absolute).
 --- Overrides persist across later Init calls that omit that key.
+--- Writes desktop sizes to config._fontDesktop; ApplyTouchFonts copies them to config.font*.
 local function ApplyFonts(config, opts)
     if opts.fontScale ~= nil then
         config.fontScale = M.NormalizeFontScale(opts.fontScale)
@@ -170,17 +205,59 @@ local function ApplyFonts(config, opts)
         overrides = {}
         config._fontOverride = overrides
     end
+    local desktop = config._fontDesktop
+    if type(desktop) ~= "table" then
+        desktop = {}
+        config._fontDesktop = desktop
+    end
     for key, base in pairs(FONT_DEFAULTS) do
         if opts[key] ~= nil then
             if type(opts[key]) ~= "number" or opts[key] < 1 then
                 error("ModMenu.Init: " .. key .. " must be a number >= 1")
             end
-            config[key] = opts[key]
+            desktop[key] = opts[key]
             overrides[key] = true
         elseif not overrides[key] then
-            config[key] = ScaleFont(base, scale)
+            desktop[key] = ScaleFont(base, scale)
         end
     end
+end
+
+--- pointerMode touch: multiply desktop-resolved sizes (defaults × fontScale and
+--- explicit fontTitle / …). Always copy from _fontDesktop so later Init does not stack.
+local function ApplyTouchFonts(config)
+    local desktop = config._fontDesktop
+    if type(desktop) ~= "table" then
+        return
+    end
+    local m = 1
+    if config.pointerMode == "touch" then
+        m = config.touchFontScale or 1.75
+    end
+    for key, _ in pairs(FONT_DEFAULTS) do
+        local n = desktop[key]
+        if type(n) == "number" then
+            config[key] = ScaleFont(n, m)
+        end
+    end
+end
+
+local TOUCH_WIDTH_CAP = 0.85
+
+--- Same multiplier as fonts. Snapshot desktop width so later Init does not stack.
+local function ApplyTouchWidth(config)
+    if config._desktopWidthFrac == nil then
+        config._desktopWidthFrac = 0.32
+    end
+    local w = config._desktopWidthFrac
+    if config.pointerMode == "touch" then
+        local m = config.touchFontScale or 1.75
+        w = w * m
+        if w > TOUCH_WIDTH_CAP then
+            w = TOUCH_WIDTH_CAP
+        end
+    end
+    config.widthFrac = w
 end
 
 function M.ResolveEngineKeyName(config)
@@ -205,7 +282,9 @@ function M.ApplyInit(config, opts, ctx)
     if opts.title ~= nil then config.title = opts.title end
     if opts.key ~= nil then config.key = opts.key end
     if opts.keyHint ~= nil then config.keyHint = opts.keyHint end
-    if opts.widthFrac ~= nil then config.widthFrac = opts.widthFrac end
+    if opts.widthFrac ~= nil then
+        config._desktopWidthFrac = opts.widthFrac
+    end
     if opts.topFrac ~= nil then config.topFrac = opts.topFrac end
     if opts.bottomFrac ~= nil then config.bottomFrac = opts.bottomFrac end
     if opts.rightFrac ~= nil then config.rightFrac = opts.rightFrac end
@@ -253,6 +332,12 @@ function M.ApplyInit(config, opts, ctx)
     if opts.cursorMode ~= nil then
         config.cursorMode = M.NormalizeCursorMode(opts.cursorMode)
     end
+    if opts.pointerMode ~= nil then
+        config.pointerMode = M.NormalizePointerMode(opts.pointerMode)
+    end
+    if opts.touchFontScale ~= nil then
+        config.touchFontScale = M.NormalizeTouchFontScale(opts.touchFontScale)
+    end
     if opts.cursorScale ~= nil then
         config.cursorScale = M.NormalizeCursorScale(opts.cursorScale)
     end
@@ -273,7 +358,11 @@ function M.ApplyInit(config, opts, ctx)
     end
     config.inputBackend = M.NormalizeInputBackend(config.inputBackend)
     config.cursorMode = M.NormalizeCursorMode(config.cursorMode)
+    config.pointerMode = M.NormalizePointerMode(config.pointerMode)
+    config.touchFontScale = M.NormalizeTouchFontScale(config.touchFontScale)
     config.cursorScale = M.NormalizeCursorScale(config.cursorScale)
+    ApplyTouchFonts(config)
+    ApplyTouchWidth(config)
 end
 
 return M
