@@ -10,7 +10,6 @@ local Instance = require("ModMenu.core.instance")
 local Cursor = require("ModMenu.core.cursor")
 local Widgets = require("ModMenu.widgets.init")
 local Session = require("ModMenu.shell.session")
-local Dock = require("ModMenu.shell.dock")
 local Close = require("ModMenu.shell.close")
 local Collapse = require("ModMenu.shell.collapse")
 local Tabs = require("ModMenu.shell.tabs")
@@ -50,9 +49,7 @@ local function PollControls(S)
     -- pollClick is the LMB-latch fallback. Handlers must SuppressPressEdge so
     -- a latch click is not also treated as an IsPressed rising edge next tick.
     for _, ctrl in ipairs(S.liveControls) do
-        if ctrl.kind == "dock" then
-            Dock.Poll(S, ctrl)
-        elseif ctrl.kind == "close" then
+        if ctrl.kind == "close" then
             Close.Poll(S, ctrl)
         elseif ctrl.kind == "collapse" then
             Collapse.Poll(S, ctrl)
@@ -70,12 +67,7 @@ local function PollControls(S)
         -- List order. Dropdown.pollClick does option rows then header.
         local consumed = false
         for _, ctrl in ipairs(S.liveControls) do
-            if ctrl.kind == "dock" then
-                if Dock.PollClick(S, ctrl) then
-                    consumed = true
-                    break
-                end
-            elseif ctrl.kind == "close" then
+            if ctrl.kind == "close" then
                 if Close.PollClick(S, ctrl) then
                     consumed = true
                     break

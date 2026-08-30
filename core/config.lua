@@ -10,11 +10,11 @@ function M.New()
     return {
         title = "Mod Menu",
         key = nil, -- set in Init; default Key.F6
-        dock = "right", -- "left" | "right" (session preset; no free drag)
+        dock = "right", -- "left" | "right" | "top" | "bottom" (author default; user can change)
         widthFrac = 0.32,
         topFrac = 0.05,
         bottomFrac = 0.05,
-        rightFrac = 0.01, -- edge margin used for both left and right docks
+        rightFrac = 0.01, -- thickness-edge gap (all four docks)
         theme = "light", -- "light" (current look) | "dark" (charcoal panel)
         colors = Theme.Preset("light"),
         fontScale = 1, -- multiplies the default font sizes (per-game; 1 = stock)
@@ -41,8 +41,8 @@ end
 
 function M.NormalizeDock(side)
     local d = string.lower(tostring(side or "right"))
-    if d == "left" then
-        return "left"
+    if d == "left" or d == "right" or d == "top" or d == "bottom" then
+        return d
     end
     return "right"
 end

@@ -10,7 +10,7 @@ M.VIS_VISIBLE = 0
 M.VIS_COLLAPSED = 1
 M.POLL_MS = 16
 
----@param opts { config: table, sections: table, values: table, onOpenCallbacks: table }
+---@param opts { config: table, sections: table, values: table, onOpenCallbacks: table, onDockCallbacks?: table }
 function M.New(opts)
     return {
         config = opts.config,
@@ -18,8 +18,10 @@ function M.New(opts)
         sectionIndexById = {},
         values = opts.values,
         onOpenCallbacks = opts.onOpenCallbacks,
+        onDockCallbacks = opts.onDockCallbacks or {},
         menuRoot = nil,
         contentBox = nil,
+        menuScroll = nil, ---@type any panel ScrollBox (reset to top after dock change)
         panelSlot = nil,
         panelBorder = nil, ---@type any fill Border
         panelOutline = nil, ---@type any 1px outline Border

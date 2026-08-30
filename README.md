@@ -59,6 +59,7 @@ Development uses the multi-file tree (what you edit in this repo):
 
 ```
 ModMenu.lua                 ← public API facade
+ConfigManager.lua           ← optional JSON store (ModMenu.ConfigManager)
 core/                       ← util, theme, umg, shared, config, instance, inputmode, cursor, input, options
 shell/                      ← session, dock, collapse, tabs, build, lifecycle, registry
 widgets/                    ← one module per item type + registry
@@ -67,7 +68,7 @@ tools/
   deploy.mjs                ← npm run deploy → dist/ModMenu.zip
 ```
 
-`widgets/*.lua` are auto-bundled. New `core/` or `shell/` files still need a `MODULES` row in `tools/bundle.mjs`.
+`widgets/*.lua` are auto-bundled. New `core/` or `shell/` files (and `ConfigManager.lua`) still need a `MODULES` row in `tools/bundle.mjs`.
 
 UX / north star: `vision.md` (shipped; leftovers are optional).
 
@@ -89,7 +90,7 @@ ModMenu.Init({
     instanceId = "YourHostMod", -- unique FName tag (Live View: ModMenu_Root_YourHostMod_1)
     key = Key.F6,
     keyHint = "F6",
-    dock = "left", -- "left" | "right"
+    dock = "left", -- "left" | "right" | "top" | "bottom" (starting edge; user can change)
     -- theme = "dark", -- charcoal panel; omit for the current ("light") look
     -- tabs = { "Cheats", "Give", "Keybinds" }, -- omit = single scroll
     -- debug = true, -- verbose [ModMenu] traces (open/close, collapse, register, click path)
@@ -192,10 +193,10 @@ Configure and bind this mod’s shell. Safe to call more than once (updates conf
 | `keyName` | from `keyHint` | Unreal `FKey` name for the `engine` backend (e.g. `"F7"`). Required when `keyHint` is not a plain name. |
 | `inputBackend` | `"ue4ss"` | `"ue4ss"` (RegisterKeyBind) or `"engine"` (poll `IsInputKeyDown`). Opt-in — no auto-detect. Same backend for toggle **and** LMB. |
 | `consoleCommand` | `nil` | Optional. Registers `name [toggle/open/close]`. Do not also register the same command in the host. |
-| `dock` | `"right"` | `"left"` \| `"right"` |
-| `widthFrac` | `0.32` | Panel width as % of viewport |
-| `topFrac` / `bottomFrac` | `0.05` | Vertical margins |
-| `rightFrac` | `0.01` | Edge margin (both docks) |
+| `dock` | `"right"` | `"left"` \| `"right"` \| `"top"` \| `"bottom"`. Author default. Header dropdown offers all four. Same panel footprint, rotated 90° for top/bottom (`widthFrac` is thickness). |
+| `widthFrac` | `0.32` | Panel thickness as % of viewport (width on left/right; height on top/bottom) |
+| `topFrac` / `bottomFrac` | `0.05` | Long-axis margins (vertical on left/right; horizontal on top/bottom) |
+| `rightFrac` | `0.01` | Thickness-edge gap (all four docks) |
 | `fontScale` | `1` | Multiplies the default font sizes (same idea as UE4SS `GuiConsoleFontScaling`). Prefer this for per-game **desktop** tuning. Explicit `fontTitle` / … still win and are not scaled by this. |
 | `fontTitle` / `fontHint` / `fontItem` / `fontSection` / `fontDropdown` | 22 / 14 / 16 / 18 / 15 | Optional absolute sizes. Omit and use `fontScale` unless one role needs a one-off size. `fontDropdown` is header + option rows. |
 | `touchFontScale` | `1.75` | Used only when `pointerMode` is `"touch"`. Multiplies resolved fonts **and** desktop `widthFrac` (0.32 → ~0.56, cap 0.85). Mortal Shell 2 `fontItem = 10` becomes 18. Not stacked across later `Init` calls. |
@@ -398,11 +399,39 @@ ModMenu.IsOpen()           -- boolean
 ModMenu.ListSections()     -- { "MaxRank", "Items", ... }
 ModMenu.SetDock("left")
 ModMenu.GetDock()
+ModMenu.OnDockChange(function(side)
+    -- persist with the host store if you want it next launch
+end)
 ModMenu.SetTab("Give")     -- requires Init({ tabs = ... })
 ModMenu.GetTab()           -- nil when tabs are off
 ```
 
 `OnOpen` runs each time the menu finishes opening (after the shell is visible). Register as many callbacks as you need (e.g. one per feature).
+
+`OnDockChange` runs after the header picker or `SetDock` applies an edge. ModMenu does not write disk; hosts that want memory across launches save `side` and pass it back on `Init({ dock = ... })`.
+
+### Persistence
+
+Optional JSON store, same singleton either way:
+
+```lua
+local ModMenu = require("ModMenu.ModMenu")
+local ConfigManager = ModMenu.ConfigManager
+-- or: require("ModMenu.ConfigManager")
+
+ConfigManager.Init({
+    id = "YourHostMod",
+    defaults = { dock = "right", keybinds = {} },
+})
+
+local dock = ConfigManager.Get("dock")
+ModMenu.Init({ dock = dock })
+ModMenu.OnDockChange(function(side)
+    ConfigManager.Set("dock", side)
+end)
+```
+
+`Init` the store **before** `ModMenu.Init` when launch options (dock, toggle key) come from disk. `Get` / `Set` / `Save` / `File` match the old standalone ConfigManager. Path is `Mods/<id>/config.json`. Hosts own what is written; ModMenu does not auto-save.
 
 ---
 
@@ -730,7 +759,7 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 1. **Per-mod shell** — each Lua mod has its own ModMenu state (`require` is not shared across mods). Multiple mods may each `Init` an independent panel. UObject roots are named `ModMenu_Root_<instanceId>_<n>` using a `ModRef` serial (`ModMenu.NextInstanceId`) so they never collide under `GameInstance`.
 2. **Toggle keys** — prefer a unique `key` / `keyHint` per mod. Claims are stored as `ModMenu.KeyClaim.<keyHint>`; clashes log **KEY CONFLICT**. On the `ue4ss` backend, UE4SS may fire every binder on that key (both menus toggle — useful for same-author dual docks, confusing for unrelated mods). On `engine`, each shell polls independently.
 3. **Input** — while open, uses GameAndUI + mouse cursor. Buttons / dock / dropdowns fire from `UButton:IsPressed()` (rising edge, 16ms poll) plus the LMB latch + `IsHovered()` fallback (touch also keeps the last hovered widget briefly and retries an unclaimed latch). Desktop checkboxes poll persistent `IsChecked()`. `pointerMode = "touch"` renders checkboxes as ON/OFF buttons so a finger tap uses the same press-edge path. The toggle key uses `Init inputBackend`: `ue4ss` (`RegisterKeyBind`) or `engine` (poll `IsInputKeyDown`). PlayerController often does **not** see LMB while Slate owns the mouse, so engine-backend menus must not rely on the LMB latch alone. Closing one menu does not force GameOnly while another ModMenu is still open (`ModMenu.OpenCount`). `ClientRestart` / `DestroyShell` do not touch input unless this instance had the menu open. On close, `GameOnly` is applied only if the game had no cursor when we opened (mouse-look); hub/inventory cursors are left alone. Camera look is **not** locked unless `Init({ ignoreLook = true })`. When the engine cursor is suppressed, opt in with `cursorMode = "modmenu"` for a HitTestInvisible overlay pointer (`core/cursor.lua`); optionally pass `cursorHideClasses` to collapse game cursor widgets while open (class defaults are skipped; prior visibility is restored on close). Overlay mode does not treat a hidden engine cursor as stolen (that would re-apply GameAndUI every tick and break checkboxes / text fields). A later `Init` that changes `cursorMode` / `cursorScale` / `cursorHideClasses` rebuilds the overlay if it already exists.
-4. **Dock** — left/right presets only (header button + `SetDock`). No free drag. Session only (not saved to disk).
+4. **Dock** — author `Init({ dock })` is the starting edge. Header dropdown offers Left / Right / Top / Bottom (`SetDock` accepts any of the four). Same rectangle rotated 90° (`widthFrac` stays thickness). No free drag. Session only unless the host persists (`OnDockChange` + saved `Init` dock).
 5. **Scroll** — the docked panel is a fixed viewport; section content lives in a ScrollBox (mouse wheel). Use `labelWidth` on `number` / `textinput` so amount rows line up like a table.
 6. **FNames** — shell names include `instanceId`; content rebuilds bump an internal generation after `ClearChildren`. Collapse / fold expand/collapse show/hide a body and do not rebuild. Prefer `SetOptions` on searchable lists over constant full rebuilds. Menu close/open keeps the UMG tree (no rebuild) so large sections (Give, keybinds) do not respawn on every toggle. `Register` / non-searchable `SetOptions` rebuild **while the menu is open**, and mark the tree dirty if they run while it is closed so the next `Open` rebuilds. `ClientRestart` destroys the shell and restores it if it was open.
 7. **Large lists** — keep `maxVisible` bounded; filter narrows the working set. Building thousands of UButtons at once is risky.
@@ -759,7 +788,7 @@ ModMenu.Init({
 })
 ```
 
-Touch mode: checkboxes are ON/OFF buttons (`press-edge`); delayed LMB latch ignored; fonts and `widthFrac` × `touchFontScale` (default 1.75); ScrollBox thumb is 28px and always shown so it is hittable (content-drag is a later pass — buttons capture the pointer). A **Close** button sits on the right of the title row so you can dismiss the menu without opening the on-screen keyboard for the toggle key. The tab strip uses 56px-tall buttons and extra gap under Dock so a finger aiming for Cheats / Give does not hit Dock Left/Right. Desktop tabs stay compact.
+Touch mode: checkboxes are ON/OFF buttons (`press-edge`); delayed LMB latch ignored; fonts and `widthFrac` × `touchFontScale` (default 1.75); ScrollBox thumb is 28px and always shown so it is hittable (content-drag is a later pass — buttons capture the pointer). A **Close** button sits on the right of the title row so you can dismiss the menu without opening the on-screen keyboard for the toggle key. The tab strip uses 56px-tall buttons and extra gap under Dock so a finger aiming for Cheats / Give does not hit the Dock button. Desktop tabs stay compact.
 
 ---
 

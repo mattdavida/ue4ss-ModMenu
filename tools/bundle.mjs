@@ -72,6 +72,7 @@ function discoverWidgetModules() {
 
 /** @type {[string, string][]} moduleName → relative path (deps only; entry is free chunk) */
 const MODULES = [
+  ["ModMenu.ConfigManager", "ConfigManager.lua"],
   ["ModMenu.core.util", "core/util.lua"],
   ["ModMenu.core.theme", "core/theme.lua"],
   ["ModMenu.core.umg", "core/umg.lua"],

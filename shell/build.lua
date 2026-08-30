@@ -89,24 +89,8 @@ function M.BuildContent(S)
     SetLabelText(hint, hintText)
     contentBox:AddChildToVerticalBox(hint)
 
-    -- Shell chrome: flip Left/Right dock without rebuilding the panel.
-    local dockBtn, dockLbl = CreateTextButton(
-        contentBox,
-        "ModMenu_Dock_" .. suffix,
-        Dock.Caption(config)
-    )
-    contentBox:AddChildToVerticalBox(dockBtn)
-    -- Touch: extra dead space so a high tab tap does not land on Dock.
-    local dockPad = 8
-    if config.pointerMode == "touch" then
-        dockPad = 24
-    end
-    AddSpacer(contentBox, "ModMenu_DockPad_" .. suffix, dockPad)
-    table.insert(S.liveControls, {
-        kind = "dock",
-        widget = dockBtn,
-        label = dockLbl,
-    })
+    -- Shell chrome: four-side dock picker (no panel rebuild).
+    Dock.BuildChrome(S, contentBox, suffix)
 
     Tabs.BuildStrip(S, contentBox, suffix)
 
@@ -204,6 +188,7 @@ function M.Teardown(S)
     end
     S.menuRoot = nil
     S.contentBox = nil
+    S.menuScroll = nil
     S.menuCanvas = nil
     S.panelSlot = nil
     S.panelBorder = nil
@@ -293,15 +278,24 @@ function M.Create(S)
 
     S.menuRoot = hud
     S.contentBox = vbox
+    S.menuScroll = scroll
     M.BuildContent(S)
 
+    local thickPct = (config.widthFrac or 0.32) * 100
+    local longPct = (1.0 - (config.topFrac or 0) - (config.bottomFrac or 0)) * 100
+    local spanX = thickPct
+    local spanY = longPct
+    if config.dock == "top" or config.dock == "bottom" then
+        spanX = longPct
+        spanY = thickPct
+    end
     Debug(string.format(
         "Shell ready name=ModMenu_Root_%s z=%d dock=%s (~%.0f%% x ~%.0f%%). Sections: %d",
         suffix,
         Instance.GetViewportZ(),
         tostring(config.dock),
-        config.widthFrac * 100,
-        (1.0 - config.topFrac - config.bottomFrac) * 100,
+        spanX,
+        spanY,
         #S.sections
     ))
 end

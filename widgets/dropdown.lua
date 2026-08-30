@@ -44,6 +44,9 @@ local function RebuildRows(ctrl)
     local fontDropdown = ctrl.fontDropdown or 15
     local optionBg = ctrl.optionBg
     local optionText = ctrl.optionText
+    local selectedBg = ctrl.optionSelectedBg or optionBg
+    local selectedText = ctrl.optionSelectedText or optionText
+    local selectedValue = Util.ToPlainString(ctrl.selectedValue) or ctrl.selectedValue
 
     for _, opt in ipairs(ctrl.list or {}) do
         if Options.OptionMatchesFilter(opt.label, filter) then
@@ -51,12 +54,14 @@ local function RebuildRows(ctrl)
             if shown < maxVisible then
                 shown = shown + 1
                 dropdownRowSerial = dropdownRowSerial + 1
+                local optValue = Util.ToPlainString(opt.value) or opt.value
+                local isSelected = selectedValue ~= nil and optValue == selectedValue
                 local btn, lbl = Umg.CreateTextButton(
                     ctrl.listBox,
                     ctrl.namePrefix .. "_Opt" .. tostring(dropdownRowSerial),
                     opt.label,
-                    optionBg,
-                    optionText,
+                    isSelected and selectedBg or optionBg,
+                    isSelected and selectedText or optionText,
                     fontDropdown
                 )
                 ctrl.listBox:AddChildToVerticalBox(btn)
@@ -267,6 +272,8 @@ local function CreatePicker(outer, namePrefix, options, selectedValue, dropOpts,
         optionRows = {},
         optionBg = colors.dropdownOptionBg,
         optionText = colors.dropdownOptionText,
+        optionSelectedBg = colors.buttonBgActive,
+        optionSelectedText = colors.buttonTextActive,
         expanded = false,
         headerWasPressed = false,
     }
@@ -334,12 +341,18 @@ function Dropdown.build(ctx)
     ctx.contentBox:AddChildToVerticalBox(root)
     umg.AddSpacer(ctx.contentBox, ctx.namePrefix .. "_Pad", 8)
 
-    table.insert(ctx.liveControls, {
-        kind = "dropdown",
+    table.insert(ctx.liveControls, Dropdown.liveControl(picker, {
         sectionId = ctx.section.id,
         item = item,
         widget = root,
         valueKey = vkey,
+    }))
+end
+
+--- Shell chrome (dock picker) and Register dropdowns share this control shape.
+function Dropdown.liveControl(picker, extra)
+    local ctrl = {
+        kind = "dropdown",
         namePrefix = picker.namePrefix,
         list = picker.list,
         labelToValue = picker.labelToValue,
@@ -362,9 +375,17 @@ function Dropdown.build(ctx)
         optionRows = picker.optionRows,
         optionBg = picker.optionBg,
         optionText = picker.optionText,
+        optionSelectedBg = picker.optionSelectedBg,
+        optionSelectedText = picker.optionSelectedText,
         expanded = false,
         headerWasPressed = false,
-    })
+    }
+    if type(extra) == "table" then
+        for key, value in pairs(extra) do
+            ctrl[key] = value
+        end
+    end
+    return ctrl
 end
 
 ---@param path string
@@ -499,7 +520,10 @@ function Dropdown.refreshLive(ctrl, list, selectedValue, values, vkey)
     SyncHeader(ctrl)
 end
 
--- Used by ModMenu SyncDockChrome FName uniqueness when recreating dock label.
+function Dropdown.createPicker(outer, namePrefix, options, selectedValue, dropOpts, config)
+    return CreatePicker(outer, namePrefix, options, selectedValue, dropOpts, config)
+end
+
 function Dropdown.nextRowSerial()
     dropdownRowSerial = dropdownRowSerial + 1
     return dropdownRowSerial
