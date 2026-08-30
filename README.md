@@ -468,7 +468,7 @@ In-game **Launch and test** stays local (needs Steam + a UE4SS game). `dotnet ru
 
 Official downloads are produced by `.github/workflows/ci.yml` on a `v*` tag (`vMAJOR.MINOR.PATCH`, for example `v1.4.0`). Tags `1.0.0`–`1.3.1` predate CI and stay as history.
 
-The player artifact is `ModMenu.zip`. The same release also attaches unsigned `ModMenu.Studio.exe` and `modmenu.exe`; SmartScreen may warn on first run. `npm run deploy` and `tooling/deploy.ps1` are for local iteration only — do not upload a local publish as the public build.
+The player artifact is `ModMenu.zip` (plus `SHA256SUMS.txt`). Studio and the CLI are not attached — run them from the repo (`dotnet run --project tooling/Studio`). `npm run deploy` and `tooling/deploy.ps1` are for local iteration only — do not upload a local publish as the public build.
 
 ---
 

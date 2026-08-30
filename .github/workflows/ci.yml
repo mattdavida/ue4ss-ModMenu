@@ -36,53 +36,33 @@ jobs:
       - name: Player zip
         run: npm run deploy
 
-      - name: Publish win-x64
+      - name: Stage player zip
         shell: pwsh
         run: |
-          $extra = @()
           if ($env:GITHUB_REF -like 'refs/tags/v*') {
             $ver = $env:GITHUB_REF_NAME.Substring(1)
             if ($ver -notmatch '^\d+\.\d+\.\d+$') {
               throw "Tag '$($env:GITHUB_REF_NAME)' must be vMAJOR.MINOR.PATCH (e.g. v1.4.0)."
             }
-            $extra = @(
-              "-p:Version=$ver",
-              "-p:AssemblyVersion=$ver.0",
-              "-p:FileVersion=$ver.0",
-              "-p:InformationalVersion=$ver"
-            )
           }
           New-Item -ItemType Directory -Force -Path publish/win-x64 | Out-Null
           Copy-Item dist/ModMenu.zip publish/win-x64/ModMenu.zip
-          dotnet publish tooling/CLI/ModMenu.CLI.csproj -c Release -r win-x64 --self-contained true -o publish/win-x64 @extra
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet publish tooling/Studio/ModMenu.Studio.csproj -c Release -r win-x64 --self-contained true -o publish/win-x64 @extra
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ModMenu-windows
-          path: |
-            publish/win-x64/ModMenu.zip
-            publish/win-x64/modmenu.exe
-            publish/win-x64/ModMenu.Studio.exe
+          path: publish/win-x64/ModMenu.zip
           if-no-files-found: error
 
       - name: Checksums
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
-          $files = @(
-            "publish/win-x64/ModMenu.zip",
-            "publish/win-x64/modmenu.exe",
-            "publish/win-x64/ModMenu.Studio.exe"
-          )
-          $lines = foreach ($file in $files) {
-            $hash = (Get-FileHash -Algorithm SHA256 $file).Hash.ToLower()
-            "$hash  $(Split-Path $file -Leaf)"
-          }
-          $lines | Set-Content -Encoding ascii "publish/win-x64/SHA256SUMS.txt"
+          $file = "publish/win-x64/ModMenu.zip"
+          $hash = (Get-FileHash -Algorithm SHA256 $file).Hash.ToLower()
+          $line = "$hash  $(Split-Path $file -Leaf)"
+          Set-Content -Encoding ascii "publish/win-x64/SHA256SUMS.txt" $line
           Get-Content "publish/win-x64/SHA256SUMS.txt"
 
       - name: Release notes
@@ -95,9 +75,9 @@ jobs:
 
           **Players:** download ``ModMenu.zip`` and extract it into ``ue4ss/Mods/`` (creates ``shared/ModMenu/ModMenu.lua``).
 
-          **Tooling:** ``ModMenu.Studio.exe`` and ``modmenu.exe`` are Windows builds. They are **not code-signed yet**. SmartScreen may show **Windows protected your PC**. Click **More info**, then **Run anyway**.
-
           Official download: this GitHub Release. A Nexus upload should be the same ``ModMenu.zip`` bytes.
+
+          Studio and the CLI are contributor tools (``dotnet run`` from the repo). They are not attached to the release.
 
           SHA-256:
           ```
@@ -112,8 +92,6 @@ jobs:
         run: >
           gh release create "${{ github.ref_name }}"
           "publish/win-x64/ModMenu.zip"
-          "publish/win-x64/modmenu.exe"
-          "publish/win-x64/ModMenu.Studio.exe"
           "publish/win-x64/SHA256SUMS.txt"
           --title "${{ github.ref_name }}"
           --notes-file "publish/win-x64/RELEASE_NOTES.md"
