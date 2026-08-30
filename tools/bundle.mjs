@@ -72,6 +72,7 @@ function discoverWidgetModules() {
 
 /** @type {[string, string][]} moduleName → relative path (deps only; entry is free chunk) */
 const MODULES = [
+  ["ModMenu.core.store", "core/store.lua"],
   ["ModMenu.ConfigManager", "ConfigManager.lua"],
   ["ModMenu.core.util", "core/util.lua"],
   ["ModMenu.core.theme", "core/theme.lua"],
@@ -83,6 +84,7 @@ const MODULES = [
   ["ModMenu.core.cursor", "core/cursor.lua"],
   ["ModMenu.core.input", "core/input.lua"],
   ["ModMenu.core.options", "core/options.lua"],
+  ["ModMenu.core.dockmath", "core/dockmath.lua"],
   ...discoverWidgetModules(),
   ["ModMenu.shell.session", "shell/session.lua"],
   ["ModMenu.shell.dock", "shell/dock.lua"],

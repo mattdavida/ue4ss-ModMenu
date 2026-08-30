@@ -59,16 +59,15 @@ Development uses the multi-file tree (what you edit in this repo):
 
 ```
 ModMenu.lua                 ← public API facade
-ConfigManager.lua           ← optional JSON store (ModMenu.ConfigManager)
-core/                       ← util, theme, umg, shared, config, instance, inputmode, cursor, input, options
+ConfigManager.lua           ← shim: require("ModMenu.ConfigManager") → core/store.lua
+core/                       ← util, theme, umg, shared, config, store, instance, input, …
 shell/                      ← session, dock, collapse, tabs, build, lifecycle, registry
 widgets/                    ← one module per item type + registry
-tools/
-  bundle.mjs                ← npm run bundle
-  deploy.mjs                ← npm run deploy → dist/ModMenu.zip
+tools/                      ← node: bundle.mjs, deploy.mjs
+tooling/                    ← C# CLI + tests (not in ModMenu.zip)
 ```
 
-`widgets/*.lua` are auto-bundled. New `core/` or `shell/` files (and `ConfigManager.lua`) still need a `MODULES` row in `tools/bundle.mjs`.
+`widgets/*.lua` are auto-bundled. New `core/` or `shell/` files still need a `MODULES` row in `tools/bundle.mjs`.
 
 UX / north star: `vision.md` (shipped; leftovers are optional).
 
@@ -432,6 +431,17 @@ end)
 ```
 
 `Init` the store **before** `ModMenu.Init` when launch options (dock, toggle key) come from disk. `Get` / `Set` / `Save` / `File` match the old standalone ConfigManager. Path is `Mods/<id>/config.json`. Hosts own what is written; ModMenu does not auto-save.
+
+### Tests (no game)
+
+```bash
+npm test
+# or: dotnet test tooling/ModMenu.sln
+dotnet run --project tooling/CLI -- test
+dotnet run --project tooling/CLI -- detect
+```
+
+Lua specs live in `tooling/lua/` (store, dock math, options). In-game `modmenu test --game` is not implemented yet.
 
 ---
 

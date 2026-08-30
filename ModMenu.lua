@@ -62,7 +62,7 @@ local Tabs = require("ModMenu.shell.tabs")
 local Lifecycle = require("ModMenu.shell.lifecycle")
 local Registry = require("ModMenu.shell.registry")
 local Confirm = require("ModMenu.shell.confirm")
-local ConfigStore = require("ModMenu.ConfigManager")
+local ConfigStore = require("ModMenu.core.store")
 
 local ModMenu = {}
 ModMenu.ConfigManager = ConfigStore

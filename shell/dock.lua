@@ -8,6 +8,7 @@
 local Util = require("ModMenu.core.util")
 local Umg = require("ModMenu.core.umg")
 local Config = require("ModMenu.core.config")
+local DockMath = require("ModMenu.core.dockmath")
 local Widgets = require("ModMenu.widgets.init")
 
 local Dropdown = Widgets.get("dropdown")
@@ -23,48 +24,20 @@ local SIDES = {
 
 local M = {}
 
+M.PercentRect = DockMath.PercentRect
+
 --- Percentage anchors. left/right unchanged; top/bottom is the same strip rotated 90°.
 --- rightFrac = thickness-edge gap; widthFrac = thickness; topFrac/bottomFrac = long-axis margins.
 function M.ApplyPercentLayout(slot, config)
     if slot == nil then
         return
     end
-    local edge = config.rightFrac or 0.01
-    local thick = config.widthFrac or 0.32
-    local longMin = config.topFrac
-    local longMax = 1.0 - config.bottomFrac
-    local minX
-    local maxX
-    local minY
-    local maxY
-    local dock = config.dock
-    if dock == "top" then
-        minX = longMin
-        maxX = longMax
-        minY = edge
-        maxY = edge + thick
-    elseif dock == "bottom" then
-        minX = longMin
-        maxX = longMax
-        minY = 1.0 - thick - edge
-        maxY = 1.0 - edge
-    elseif dock == "left" then
-        minX = edge
-        maxX = edge + thick
-        minY = longMin
-        maxY = longMax
-    else
-        minX = 1.0 - thick - edge
-        maxX = 1.0 - edge
-        minY = longMin
-        maxY = longMax
-    end
-
+    local rect = DockMath.PercentRect(config)
     pcall(function()
         slot:SetAutoSize(false)
         slot:SetAnchors({
-            Minimum = { X = minX, Y = minY },
-            Maximum = { X = maxX, Y = maxY },
+            Minimum = { X = rect.minX, Y = rect.minY },
+            Maximum = { X = rect.maxX, Y = rect.maxY },
         })
         slot:SetOffsets({ Left = 0, Top = 0, Right = 0, Bottom = 0 })
         slot:SetAlignment({ X = 0.0, Y = 0.0 })

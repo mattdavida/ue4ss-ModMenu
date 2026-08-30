@@ -1,2 +1,6 @@
 node_modules/
 dist/
+tooling/**/bin/
+tooling/**/obj/
+tooling/.tmp*
+.vs/
