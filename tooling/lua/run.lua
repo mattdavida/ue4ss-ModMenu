@@ -118,6 +118,8 @@ end
 
 local specs = {
     "store_spec.lua",
+    "store_json_spec.lua",
+    "store_paths_spec.lua",
     "dock_spec.lua",
     "options_spec.lua",
     "config_spec.lua",

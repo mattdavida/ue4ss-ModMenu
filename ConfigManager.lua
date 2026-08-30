@@ -1,5 +1,5 @@
 --[[
-  Public require path for the JSON store. Implementation is core/store.lua.
+  Public require path for the host store. Implementation is store/init.lua.
 ]]
 
-return require("ModMenu.core.store")
+return require("ModMenu.store.init")

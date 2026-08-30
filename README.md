@@ -61,15 +61,16 @@ Development uses the multi-file tree (what you edit in this repo):
 
 ```
 ModMenu.lua                 ← public API facade
-ConfigManager.lua           ← shim: require("ModMenu.ConfigManager") → core/store.lua
-core/                       ← util, theme, umg, shared, config, store, instance, input, …
+ConfigManager.lua           ← shim: require("ModMenu.ConfigManager") → store/init.lua
+store/                      ← host JSON store (init, json, paths)
+core/                       ← util, theme, umg, shared, config (Init options), instance, input, …
 shell/                      ← session, dock, collapse, tabs, build, lifecycle, registry
 widgets/                    ← one module per item type + registry
 tools/                      ← node: bundle.mjs, deploy.mjs
 tooling/                    ← C# CLI, Studio, tests (not in ModMenu.zip)
 ```
 
-`widgets/*.lua` are auto-bundled. New `core/` or `shell/` files still need a `MODULES` row in `tools/bundle.mjs`.
+`store/*.lua` and `widgets/*.lua` are auto-bundled. New `core/` or `shell/` files still need a `MODULES` row in `tools/bundle.mjs`.
 
 UX / north star: `vision.md` (shipped; leftovers are optional).
 
@@ -434,7 +435,7 @@ ModMenu.OnDockChange(function(side)
 end)
 ```
 
-`Init` the store **before** `ModMenu.Init` when launch options (dock, toggle key) come from disk. `Get` / `Set` / `Save` / `File` match the old standalone ConfigManager. Path is `Mods/<id>/config.json`. Hosts own what is written; ModMenu does not auto-save.
+`Init` the store **before** `ModMenu.Init` when launch options (dock, toggle key) come from disk. `Get` / `Set` / `Save` / `File` match the old standalone ConfigManager. Implementation is `store/` (`init`, `json`, `paths`). Path is `Mods/<id>/config.json`. Hosts own what is written; ModMenu does not auto-save.
 
 ### Tests (no game)
 
@@ -447,7 +448,7 @@ dotnet run --project tooling/CLI -- test
 dotnet run --project tooling/CLI -- detect
 ```
 
-Lua specs live in `tooling/lua/` (store, dock math, options). Headless Studio window tests lock the picker, remembered last game, Refresh rebind, the **Run Lua tests** log, and the last-run pass/fail banner.
+Lua specs live in `tooling/lua/` (store / ConfigManager shims, json, paths, dock math, options). Headless Studio window tests lock the picker, remembered last game, Refresh rebind, the **Run Lua tests** log, and the last-run pass/fail banner. In-game **Launch and test** also persists dock through `ModMenu.ConfigManager` on Harness A and B (each writes its own `config.json`).
 
 ### Studio
 
@@ -514,7 +515,7 @@ Dropdown also exposes helpers used by the registry (`refreshLive`, `collapseAll`
 3. Document fields under **Item types** below.
 4. Smoke-test via a host `Register` section, then `npm run deploy`.
 
-`widgets/*.lua` are auto-bundled — do not add a `MODULES` row for a new widget. New `core/` or `shell/` files still need one.
+`store/*.lua` and `widgets/*.lua` are auto-bundled — do not add a `MODULES` row for a new store helper or widget. New `core/` or `shell/` files still need one.
 
 Natural follow-ons (not required for hosts): `slider` / stepper polish — same contract as above.
 
