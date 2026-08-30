@@ -55,3 +55,13 @@ leftover:close()
 assert_eq("bad JSON left untouched", leftoverText, "{")
 
 pcall(os.remove, tmp)
+
+local viaShim = require("ModMenu.ConfigManager")
+local viaCore = require("ModMenu.core.store")
+local viaStore = require("ModMenu.store.init")
+assert_true("ConfigManager shim is store.init", viaShim == viaStore)
+assert_true("core.store shim is store.init", viaCore == viaStore)
+assert_true("ConfigManager.Get exists", type(viaShim.Get) == "function")
+assert_true("ConfigManager.Set exists", type(viaShim.Set) == "function")
+assert_true("ConfigManager.Save exists", type(viaShim.Save) == "function")
+assert_true("ConfigManager.File exists", type(viaShim.File) == "function")

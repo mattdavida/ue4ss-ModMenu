@@ -40,11 +40,11 @@ function collectRequires(source) {
   return names;
 }
 
-/** widgets/*.lua — type files A–Z, widgets/init.lua last. */
-function discoverWidgetModules() {
-  const widgetsDir = path.join(ROOT, "widgets");
+/** dir/*.lua — peers A–Z, init.lua last so it can require the others. */
+function discoverPackageModules(dir, prefix) {
+  const abs = path.join(ROOT, dir);
   const files = fs
-    .readdirSync(widgetsDir, { withFileTypes: true })
+    .readdirSync(abs, { withFileTypes: true })
     .filter((ent) => ent.isFile() && ent.name.endsWith(".lua"))
     .map((ent) => ent.name);
 
@@ -55,23 +55,24 @@ function discoverWidgetModules() {
   }
 
   if (files.includes("init.lua")) {
-    const initRequires = collectRequires(readLua("widgets/init.lua"));
+    const initRequires = collectRequires(readLua(`${dir}/init.lua`));
     for (const file of typeFiles) {
-      const modName = `ModMenu.widgets.${path.basename(file, ".lua")}`;
+      const modName = `${prefix}.${path.basename(file, ".lua")}`;
       if (!initRequires.has(modName)) {
-        console.warn(`widgets/${file} is not required by widgets/init.lua`);
+        console.warn(`${dir}/${file} is not required by ${dir}/init.lua`);
       }
     }
   }
 
   return ordered.map((file) => [
-    `ModMenu.widgets.${path.basename(file, ".lua")}`,
-    `widgets/${file}`,
+    `${prefix}.${path.basename(file, ".lua")}`,
+    `${dir}/${file}`,
   ]);
 }
 
 /** @type {[string, string][]} moduleName → relative path (deps only; entry is free chunk) */
 const MODULES = [
+  ...discoverPackageModules("store", "ModMenu.store"),
   ["ModMenu.core.store", "core/store.lua"],
   ["ModMenu.ConfigManager", "ConfigManager.lua"],
   ["ModMenu.core.util", "core/util.lua"],
@@ -85,7 +86,7 @@ const MODULES = [
   ["ModMenu.core.input", "core/input.lua"],
   ["ModMenu.core.options", "core/options.lua"],
   ["ModMenu.core.dockmath", "core/dockmath.lua"],
-  ...discoverWidgetModules(),
+  ...discoverPackageModules("widgets", "ModMenu.widgets"),
   ["ModMenu.shell.session", "shell/session.lua"],
   ["ModMenu.shell.dock", "shell/dock.lua"],
   ["ModMenu.shell.close", "shell/close.lua"],

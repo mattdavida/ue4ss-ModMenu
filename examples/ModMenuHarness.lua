@@ -8,6 +8,7 @@
 ]]
 
 local ModMenu = require("ModMenu.ModMenu")
+local ConfigManager = ModMenu.ConfigManager
 
 local INSTANCE = "ModMenuHarness"
 local wrote = false
@@ -195,13 +196,18 @@ local function WriteResults(errors)
     return true
 end
 
+ConfigManager.Init({
+    id = INSTANCE,
+    defaults = { dock = "left" },
+})
+
 ModMenu.Init({
     title = "ModMenu Harness",
     instanceId = INSTANCE,
     theme = "dark",
     key = Key.F8,
     keyHint = "F8",
-    dock = "left",
+    dock = ConfigManager.Get("dock"),
     consoleCommand = "modmenuhost",
     tabs = { "Cheats", "Give", "Keybinds" },
     fontTitle = 16,
@@ -465,12 +471,22 @@ local function RunSuite()
         AssertEq("GetTab Cheats", ModMenu.GetTab(), "Cheats")
     end, SLOW_MS)
 
+    T(function()
+        AssertTrue("ConfigManager attached", type(ConfigManager.Get) == "function")
+        AssertEq("ConfigManager default dock", ConfigManager.Get("dock"), "left")
+        AssertTrue("ConfigManager require is facade", require("ModMenu.ConfigManager") == ConfigManager)
+        local file = ConfigManager.File()
+        AssertTrue("ConfigManager file under harness", type(file) == "string" and file:find(INSTANCE, 1, true) ~= nil)
+        AssertTrue("ConfigManager file is config.json", type(file) == "string" and file:find("config.json", 1, true) ~= nil)
+    end)
+
     local docks = {}
     T(function()
         AssertTrue("OnDockChange exists", type(ModMenu.OnDockChange) == "function")
         if type(ModMenu.OnDockChange) == "function" then
             ModMenu.OnDockChange(function(side)
                 docks[#docks + 1] = side
+                ConfigManager.Set("dock", side)
             end)
         end
     end)
@@ -483,8 +499,21 @@ local function RunSuite()
             if type(ModMenu.OnDockChange) == "function" then
                 AssertEq("OnDockChange " .. dest, docks[#docks], dest)
             end
+            AssertEq("ConfigManager dock " .. dest, ConfigManager.Get("dock"), dest)
         end, SLOW_MS)
     end
+
+    T(function()
+        local path = ConfigManager.File()
+        local f = type(path) == "string" and io.open(path, "r")
+        AssertTrue("ConfigManager wrote harness config", f ~= nil)
+        if f then
+            local text = f:read("*a")
+            f:close()
+            AssertTrue("config.json has dock", text:find('"dock"', 1, true) ~= nil)
+            AssertTrue("config.json has left", text:find('"left"', 1, true) ~= nil)
+        end
+    end)
 
     T(function()
         AssertTrue("IsOpen after suite", ModMenu.IsOpen())

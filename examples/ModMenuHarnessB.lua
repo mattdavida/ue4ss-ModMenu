@@ -7,6 +7,7 @@
 ]]
 
 local ModMenu = require("ModMenu.ModMenu")
+local ConfigManager = ModMenu.ConfigManager
 
 local INSTANCE = "ModMenuHarnessB"
 local PEER = "ModMenuHarness"
@@ -221,13 +222,18 @@ local function WriteResults(errors)
     return true
 end
 
+ConfigManager.Init({
+    id = INSTANCE,
+    defaults = { dock = "right", who = "B" },
+})
+
 ModMenu.Init({
     title = "Harness B",
     instanceId = INSTANCE,
     theme = "light",
     key = Key.F9,
     keyHint = "F9",
-    dock = "right",
+    dock = ConfigManager.Get("dock"),
     consoleCommand = "modmenuharnessb",
     tabs = { "Main", "Extra" },
     fontTitle = 16,
@@ -285,6 +291,12 @@ local function RunSuite()
         AssertTrue("GetInstanceSerial is number", type(ModMenu.GetInstanceSerial()) == "number")
         AssertEq("GetDock initial", ModMenu.GetDock(), "right")
         AssertEq("GetTab initial", ModMenu.GetTab(), "Main")
+        AssertEq("ConfigManager dock", ConfigManager.Get("dock"), "right")
+        AssertEq("ConfigManager who", ConfigManager.Get("who"), "B")
+        ConfigManager.Set("who", "peer")
+        AssertEq("ConfigManager Set who", ConfigManager.Get("who"), "peer")
+        local file = ConfigManager.File()
+        AssertTrue("B store is own config", type(file) == "string" and file:find(INSTANCE, 1, true) ~= nil)
     end)
 
     T(function()
