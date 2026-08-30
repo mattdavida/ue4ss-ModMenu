@@ -9,5 +9,7 @@ public sealed class LuaSuiteTests
         Assert.True(result.Ok, string.Join("\n", result.Failures));
         Assert.True(result.Passed > 0);
         Assert.Equal(0, result.Failed);
+        Assert.Equal(result.Passed, result.Tests.Count);
+        Assert.All(result.Tests, check => Assert.False(string.IsNullOrWhiteSpace(check.Name)));
     }
 }

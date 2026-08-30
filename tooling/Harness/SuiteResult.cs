@@ -17,6 +17,9 @@ public sealed class SuiteResult
     [JsonPropertyName("failures")]
     public List<string> Failures { get; set; } = [];
 
+    [JsonPropertyName("tests")]
+    public List<SuiteCheck> Tests { get; set; } = [];
+
     public static SuiteResult Parse(string json)
     {
         try
@@ -32,4 +35,16 @@ public sealed class SuiteResult
             throw new InvalidOperationException("Suite JSON was not a result object: " + json.Trim(), ex);
         }
     }
+}
+
+public sealed class SuiteCheck
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("ok")]
+    public bool Ok { get; set; }
+
+    [JsonPropertyName("detail")]
+    public string? Detail { get; set; }
 }

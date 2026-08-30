@@ -221,7 +221,7 @@ function M.Flush(S)
     ExecuteInGameThreadWithDelay(1, S.tabApplyFn)
 end
 
---- Host / Register path: switch now if closed, queue if the menu is open.
+--- Host SetTab: apply now so GetTab matches. Click path still queues (Flush).
 ---@return boolean
 function M.Select(S, tabId)
     if not M.Enabled(S) then
@@ -237,12 +237,7 @@ function M.Select(S, tabId)
     if tabId == S.activeTab then
         return true
     end
-    if S.menuOpen then
-        M.QueueSelect(S, tabId)
-        M.Flush(S)
-    else
-        M.Apply(S, tabId)
-    end
+    M.Apply(S, tabId)
     return true
 end
 

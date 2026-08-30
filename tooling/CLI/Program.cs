@@ -41,18 +41,59 @@ static int Detect()
 
 static int Test(string[] argv)
 {
-    if (argv.Any(a => a is "--game" || a.StartsWith("--game=", StringComparison.Ordinal)))
+    var gameQuery = ParseOption(argv, "--game");
+    if (gameQuery is null)
     {
-        Console.Error.WriteLine("In-game `test --game` is not implemented yet. Run `modmenu test` for the no-game Lua suite.");
+        var result = LuaSuite.Run();
+        foreach (var check in result.Tests)
+        {
+            if (check.Ok)
+                Console.WriteLine("  PASS  " + check.Name);
+            else
+                Console.Error.WriteLine("  FAIL  " + check.Name + (string.IsNullOrEmpty(check.Detail) ? "" : ": " + check.Detail));
+        }
+
+        Console.WriteLine($"{result.Passed} passed, {result.Failed} failed.");
+
+        return result.Ok ? 0 : 1;
+    }
+
+    var game = GameResolver.Find(gameQuery);
+    if (game is null)
+    {
+        Console.Error.WriteLine($"No unique game matched {gameQuery}. Run `modmenu detect`.");
         return 2;
     }
 
-    var result = LuaSuite.Run();
-    Console.WriteLine($"{result.Passed} passed, {result.Failed} failed.");
-    foreach (var failure in result.Failures)
+    var inGame = InGameTest.Run(game, new InGameTestOptions
+    {
+        SkipLaunch = argv.Any(a => a is "--skip-launch"),
+        PlayLive = argv.Any(a => a is "--play-live"),
+        Log = Console.WriteLine
+    });
+
+    if (inGame.Passed > 0 || inGame.Failed > 0)
+        Console.WriteLine($"{inGame.Passed} host checks passed, {inGame.Failed} failed.");
+    foreach (var failure in inGame.Failures)
         Console.Error.WriteLine("  " + failure);
 
-    return result.Ok ? 0 : 1;
+    Console.WriteLine(inGame.Ok ? "In-game harness ok." : "In-game harness failed.");
+    return inGame.Ok ? 0 : 1;
+}
+
+static string? ParseOption(string[] argv, string name)
+{
+    for (var i = 0; i < argv.Length; i++)
+    {
+        if (argv[i].Equals(name, StringComparison.Ordinal) && i + 1 < argv.Length)
+            return argv[i + 1];
+
+        const string prefix = "--game=";
+        if (name == "--game" && argv[i].StartsWith(prefix, StringComparison.Ordinal))
+            return argv[i][prefix.Length..];
+    }
+
+    return null;
 }
 
 static int Unknown(string command)
@@ -65,11 +106,13 @@ static int Unknown(string command)
 static void PrintHelp()
 {
     Console.WriteLine("""
-        modmenu — ModMenu CLI (no-game tests + Steam detect)
+        modmenu — ModMenu CLI
 
-          detect          List Unreal Steam games (Win64 + whether UE4SS is present)
-          test            Run the Lua unit suite (no game)
-          test --game …   Not yet (in-game harness)
+          detect                         List Unreal Steam games
+          test                           No-game Lua suite
+          test --game "Fatal Claw"       Deploy host, launch via Steam, poll results, remove host
+          test --game "Fatal Claw" --skip-launch
+          test --game "Fatal Claw" --play-live   Step the suite in-game with delays so you can watch
 
         dotnet test tooling/ModMenu.sln
         """);

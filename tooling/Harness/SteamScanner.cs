@@ -77,13 +77,15 @@ public static class SteamScanner
                 if (win64 is null)
                     continue;
 
+                var exePath = PathDetector.FindGameExecutable(win64);
                 games.Add(new DetectedGame
                 {
                     Name = name,
                     InstallPath = fullInstall,
                     Win64Path = win64,
-                    ExePath = PathDetector.FindGameExecutable(win64),
-                    AppId = appId
+                    ExePath = exePath,
+                    AppId = appId,
+                    ArtworkPath = GameArtwork.FindSteamArtwork(steamPath, appId)
                 });
             }
         }
@@ -141,6 +143,8 @@ public static class SteamScanner
 
         return false;
     }
+
+    public static string? FindSteamPath() => FindSteamInstallPath();
 
     private static string? FindSteamInstallPath()
     {

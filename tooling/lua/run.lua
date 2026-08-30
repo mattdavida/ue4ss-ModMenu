@@ -6,6 +6,7 @@
 local passed = 0
 local failed = 0
 local failures = {}
+local tests = {}
 
 local function encode(value)
     local t = type(value)
@@ -85,8 +86,13 @@ local function deep_eq(a, b)
     return true
 end
 
-local function check(name, cond, detail)
-    if cond then
+local function record(name, ok, detail)
+    tests[#tests + 1] = {
+        name = name,
+        ok = ok == true,
+        detail = detail,
+    }
+    if ok then
         passed = passed + 1
         return
     end
@@ -94,17 +100,20 @@ local function check(name, cond, detail)
     failures[#failures + 1] = name .. (detail and (": " .. detail) or "")
 end
 
+local function check(name, cond, detail)
+    record(name, cond, detail)
+end
+
 function assert_true(name, cond)
-    check(name, cond == true, "expected true")
+    check(name, cond == true, cond == true and nil or "expected true")
 end
 
 function assert_eq(name, got, want)
     if deep_eq(got, want) then
-        passed = passed + 1
+        record(name, true)
         return
     end
-    failed = failed + 1
-    failures[#failures + 1] = name .. ": got " .. encode(got) .. " want " .. encode(want)
+    record(name, false, "got " .. encode(got) .. " want " .. encode(want))
 end
 
 local specs = {
@@ -132,6 +141,7 @@ print(encode({
     passed = passed,
     failed = failed,
     failures = failures,
+    tests = tests,
 }))
 
 return failed == 0

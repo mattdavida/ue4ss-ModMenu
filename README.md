@@ -64,7 +64,7 @@ core/                       ← util, theme, umg, shared, config, store, instanc
 shell/                      ← session, dock, collapse, tabs, build, lifecycle, registry
 widgets/                    ← one module per item type + registry
 tools/                      ← node: bundle.mjs, deploy.mjs
-tooling/                    ← C# CLI + tests (not in ModMenu.zip)
+tooling/                    ← C# CLI, Studio, tests (not in ModMenu.zip)
 ```
 
 `widgets/*.lua` are auto-bundled. New `core/` or `shell/` files still need a `MODULES` row in `tools/bundle.mjs`.
@@ -439,9 +439,14 @@ npm test
 # or: dotnet test tooling/ModMenu.sln
 dotnet run --project tooling/CLI -- test
 dotnet run --project tooling/CLI -- detect
+dotnet run --project tooling/Studio
 ```
 
-Lua specs live in `tooling/lua/` (store, dock math, options). In-game `modmenu test --game` is not implemented yet.
+Lua specs live in `tooling/lua/` (store, dock math, options). Studio is a picker over the same harness.
+
+In-game: `dotnet run --project tooling/CLI -- test --game "Fatal Claw"` (or Studio **Launch and test**) deploys `examples/ModMenuHarness.lua`, launches via Steam, waits **30s after the host loads** before `Open`, runs the Lua feature suite (each check logs PASS/FAIL), polls `ue4ss/ModMenuHarness-results.json` for 120s (240s with `--play-live`), then closes the game (if this run launched it) and removes only the harness mod.
+
+`--play-live` writes `play-live.txt` on the host so the suite steps with `ExecuteInGameThreadWithDelay` (you can watch tabs/dock change). UE4SS must already be installed. FatalClawMod and `config.json` are left alone. `examples/ModMenuHost.lua` stays the human dummy; the harness is the suite.
 
 ---
 

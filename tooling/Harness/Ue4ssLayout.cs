@@ -12,4 +12,18 @@ public static class Ue4ssLayout
 
         return File.Exists(Path.Combine(win64Path, "dwmapi.dll"));
     }
+
+    public static string Ue4ssRoot(string win64Path)
+    {
+        var nested = Path.Combine(win64Path, "ue4ss");
+        return Directory.Exists(nested) ? nested : win64Path;
+    }
+
+    public static string ModsDirectory(string win64Path)
+        => Path.Combine(Ue4ssRoot(win64Path), "Mods");
+
+    public const string ResultsFileName = "ModMenuHarness-results.json";
+
+    public static string ResultsPath(string win64Path)
+        => Path.Combine(Ue4ssRoot(win64Path), ResultsFileName);
 }
