@@ -1,5 +1,7 @@
 # ModMenu
 
+[![CI](https://github.com/mattdavida/ue4ss-ModMenu/actions/workflows/ci.yml/badge.svg)](https://github.com/mattdavida/ue4ss-ModMenu/actions/workflows/ci.yml)
+
 ModMenu is a lightweight UI framework for UE4SS Lua mods that lets feature modules register reusable in-game settings panels without each mod reimplementing its own ImGui or UMG shell.
 
 ![ModMenu Host (F8, left, Cheats tab) and Mortal Shell 2 (F6, right) — two independent shells](GithubAssets/ModMenuHero.png)
@@ -20,13 +22,7 @@ Showcase dummy: `examples/ModMenuHost.lua` (copy into `ue4ss/Mods/YourMod/Script
 
 ## Install (players / Nexus)
 
-Build from this repo:
-
-```bash
-npm run deploy
-```
-
-Extract `dist/ModMenu.zip` into `ue4ss/Mods/`. No rename — the zip already contains the correct path:
+Official `ModMenu.zip` is on [GitHub Releases](https://github.com/mattdavida/ue4ss-ModMenu/releases). Extract it into `ue4ss/Mods/`. No rename — the zip already contains the correct path:
 
 ```
 ue4ss/Mods/
@@ -48,6 +44,12 @@ local ModMenu = require("ModMenu.ModMenu")
 ```
 
 The host mod must be enabled (`enabled.txt` / `mods.txt`). ModMenu is loaded via `require` from `shared/`; it is not a separate enabled mod.
+
+Build a local zip (iteration only — do not upload it as the public release):
+
+```bash
+npm run deploy
+```
 
 Also produced for tooling: `dist/ModMenu.bundle.lua` and `dist/release/shared/ModMenu/ModMenu.lua`.  
 `UEHelpers` is **not** bundled — leave the stock UE4SS copy under `Mods/shared/`.  
@@ -434,6 +436,8 @@ end)
 
 ### Tests (no game)
 
+CI (`.github/workflows/ci.yml`) runs `dotnet test tooling/ModMenu.sln` on every pull request and push to `main`. Locally:
+
 ```bash
 npm test
 # or: dotnet test tooling/ModMenu.sln
@@ -442,11 +446,17 @@ dotnet run --project tooling/CLI -- detect
 dotnet run --project tooling/Studio
 ```
 
-Lua specs live in `tooling/lua/` (store, dock math, options). Studio is a picker over the same harness.
+Lua specs live in `tooling/lua/` (store, dock math, options). Studio is a picker over the same harness. In-game **Launch and test** stays local (needs Steam + a UE4SS game).
 
 In-game: `dotnet run --project tooling/CLI -- test --game "Fatal Claw"` (or Studio **Launch and test**) deploys `examples/ModMenuHarness.lua`, launches via Steam, waits **30s after the host loads** before `Open`, runs the Lua feature suite (each check logs PASS/FAIL), polls `ue4ss/ModMenuHarness-results.json` for 120s (240s with `--play-live`), then closes the game (if this run launched it) and removes only the harness mod.
 
 `--play-live` writes `play-live.txt` on the host so the suite steps with `ExecuteInGameThreadWithDelay` (you can watch tabs/dock change). UE4SS must already be installed. FatalClawMod and `config.json` are left alone. `examples/ModMenuHost.lua` stays the human dummy; the harness is the suite.
+
+### Releases
+
+Official downloads are produced by `.github/workflows/ci.yml` on a `v*` tag (`vMAJOR.MINOR.PATCH`, for example `v1.4.0`). Tags `1.0.0`–`1.3.1` predate CI and stay as history.
+
+The player artifact is `ModMenu.zip`. The same release also attaches unsigned `ModMenu.Studio.exe` and `modmenu.exe`; SmartScreen may warn on first run. `npm run deploy` and `tooling/deploy.ps1` are for local iteration only — do not upload a local publish as the public build.
 
 ---
 
@@ -874,7 +884,8 @@ A fuller dummy (tabs, every widget, log-only clicks) is `examples/ModMenuHost.lu
 
 ## See also
 
-- Install / Nexus zip: `npm run deploy` → `dist/ModMenu.zip`
+- Install / Nexus zip: [GitHub Releases](https://github.com/mattdavida/ue4ss-ModMenu/releases) (`ModMenu.zip`); local: `npm run deploy`
+- CI: `.github/workflows/ci.yml`
 - UX / north star: `vision.md`
 - Widget registry: `widgets/init.lua`
 - Public API facade: `ModMenu.lua`
