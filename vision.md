@@ -63,7 +63,6 @@ Not blocking a “vision shipped” claim. Pick these when a host actually needs
 |----------|--------|
 | 2-column action grids | `row` is the current workaround |
 | Hover / pressed restyle | Constructed `UButton` is flat fill |
-| Header Close control | Hint + hotkey already close |
 | `slider` / `radio` | Dropdown + number cover most hosts |
 | Checkbox / separator tokens | Native checkbox tint; separator is still a spacer |
 | Tab Q/E | Mouse strip is v1 |

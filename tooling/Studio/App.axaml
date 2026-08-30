@@ -1,0 +1,187 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="ModMenu.Studio.App"
+             Name="ModMenu Studio"
+             RequestedThemeVariant="Dark">
+    <Application.Resources>
+        <SolidColorBrush x:Key="AppAccent" Color="#00A3FF" />
+        <SolidColorBrush x:Key="AppAccentHover" Color="#33B5FF" />
+        <SolidColorBrush x:Key="AppInk" Color="#0E1014" />
+        <SolidColorBrush x:Key="AppMuted" Color="#A8B0BC" />
+        <SolidColorBrush x:Key="AppFaint" Color="#7A8494" />
+        <CornerRadius x:Key="ControlRadius">8</CornerRadius>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme>
+            <FluentTheme.Palettes>
+                <ColorPaletteResources x:Key="Dark"
+                                       Accent="#00A3FF"
+                                       RegionColor="#0E1014" />
+            </FluentTheme.Palettes>
+        </FluentTheme>
+
+        <Style Selector="Window">
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, sans-serif" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+
+        <Style Selector="TextBox, Button">
+            <Setter Property="CornerRadius" Value="{StaticResource ControlRadius}" />
+        </Style>
+
+        <Style Selector="Button.navGame">
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="Padding" Value="8,4,12,4" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+
+        <Style Selector="Button.close">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="MinWidth" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{StaticResource AppMuted}" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="Button.close:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#22FFFFFF" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+
+        <Style Selector="Button.refresh">
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{StaticResource AppMuted}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="Button.refresh:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#22FFFFFF" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+
+        <Style Selector="TextBox">
+            <Setter Property="Background" Value="#14FFFFFF" />
+            <Setter Property="BorderBrush" Value="#18FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="MinHeight" Value="38" />
+            <Setter Property="Padding" Value="12,8" />
+        </Style>
+
+        <Style Selector="TextBox.log">
+            <Setter Property="VerticalContentAlignment" Value="Top" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+        </Style>
+
+        <Style Selector="Button">
+            <Setter Property="Background" Value="#18FFFFFF" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#22FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="16,10" />
+            <Setter Property="MinHeight" Value="40" />
+        </Style>
+
+        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#28FFFFFF" />
+        </Style>
+
+        <Style Selector="Button.accent">
+            <Setter Property="Background" Value="{StaticResource AppAccent}" />
+            <Setter Property="Foreground" Value="{StaticResource AppInk}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource AppAccentHover}" />
+        </Style>
+
+        <Style Selector="Button.accent:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
+
+        <Style Selector="Button:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
+
+        <Style Selector="ListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4" />
+        </Style>
+
+        <Style Selector="ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+
+        <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+
+        <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+
+        <Style Selector="Border.result">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Border.result.run">
+            <Setter Property="Background" Value="#1800A3FF" />
+            <Setter Property="BorderBrush" Value="#4400A3FF" />
+        </Style>
+        <Style Selector="Border.result.pass">
+            <Setter Property="Background" Value="#14301F" />
+            <Setter Property="BorderBrush" Value="#3DCC7A" />
+        </Style>
+        <Style Selector="Border.result.fail">
+            <Setter Property="Background" Value="#3D1518" />
+            <Setter Property="BorderBrush" Value="#E24B4B" />
+        </Style>
+        <Style Selector="Border.result.run TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource AppAccent}" />
+        </Style>
+        <Style Selector="Border.result.pass TextBlock">
+            <Setter Property="Foreground" Value="#7DFFB3" />
+        </Style>
+        <Style Selector="Border.result.fail TextBlock">
+            <Setter Property="Foreground" Value="#FF8A8A" />
+        </Style>
+
+        <Style Selector="Border.GameRow">
+            <Setter Property="Background" Value="#14FFFFFF" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style Selector="ListBoxItem:pointerover Border.GameRow">
+            <Setter Property="Background" Value="#22FFFFFF" />
+        </Style>
+
+        <Style Selector="ListBoxItem:selected Border.GameRow">
+            <Setter Property="Background" Value="#3D00A3FF" />
+            <Setter Property="BorderBrush" Value="{StaticResource AppAccent}" />
+        </Style>
+    </Application.Styles>
+</Application>

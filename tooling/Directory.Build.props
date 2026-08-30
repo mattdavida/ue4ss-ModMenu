@@ -1,0 +1,24 @@
+<Project>
+  <PropertyGroup>
+    <Company>ModMenu</Company>
+    <Product>ModMenu</Product>
+    <Copyright>Copyright (c) 2026 Matthew Arvidson</Copyright>
+  </PropertyGroup>
+
+  <!-- Applied when publishing with -r (win-x64). Left off the default
+       PropertyGroup so everyday `dotnet run` stays a fast framework-dependent build. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <Target Name="RemoveNativePdbsFromPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_NativePdbs Include="$(PublishDir)*.pdb" />
+    </ItemGroup>
+    <Delete Files="@(_NativePdbs)" />
+  </Target>
+</Project>

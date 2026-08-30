@@ -1,5 +1,7 @@
 # ModMenu
 
+[![CI](https://github.com/mattdavida/ue4ss-ModMenu/actions/workflows/ci.yml/badge.svg)](https://github.com/mattdavida/ue4ss-ModMenu/actions/workflows/ci.yml)
+
 ModMenu is a lightweight UI framework for UE4SS Lua mods that lets feature modules register reusable in-game settings panels without each mod reimplementing its own ImGui or UMG shell.
 
 ![ModMenu Host (F8, left, Cheats tab) and Mortal Shell 2 (F6, right) — two independent shells](GithubAssets/ModMenuHero.png)
@@ -20,13 +22,7 @@ Showcase dummy: `examples/ModMenuHost.lua` (copy into `ue4ss/Mods/YourMod/Script
 
 ## Install (players / Nexus)
 
-Build from this repo:
-
-```bash
-npm run deploy
-```
-
-Extract `dist/ModMenu.zip` into `ue4ss/Mods/`. No rename — the zip already contains the correct path:
+Official `ModMenu.zip` is on [GitHub Releases](https://github.com/mattdavida/ue4ss-ModMenu/releases). Extract it into `ue4ss/Mods/`. No rename — the zip already contains the correct path:
 
 ```
 ue4ss/Mods/
@@ -49,6 +45,12 @@ local ModMenu = require("ModMenu.ModMenu")
 
 The host mod must be enabled (`enabled.txt` / `mods.txt`). ModMenu is loaded via `require` from `shared/`; it is not a separate enabled mod.
 
+Build a local zip (iteration only — do not upload it as the public release):
+
+```bash
+npm run deploy
+```
+
 Also produced for tooling: `dist/ModMenu.bundle.lua` and `dist/release/shared/ModMenu/ModMenu.lua`.  
 `UEHelpers` is **not** bundled — leave the stock UE4SS copy under `Mods/shared/`.  
 Omit this repo’s `README.md` / `GithubAssets/` from player zips (use Nexus gallery images instead).
@@ -59,12 +61,12 @@ Development uses the multi-file tree (what you edit in this repo):
 
 ```
 ModMenu.lua                 ← public API facade
-core/                       ← util, theme, umg, shared, config, instance, inputmode, cursor, input, options
+ConfigManager.lua           ← shim: require("ModMenu.ConfigManager") → core/store.lua
+core/                       ← util, theme, umg, shared, config, store, instance, input, …
 shell/                      ← session, dock, collapse, tabs, build, lifecycle, registry
 widgets/                    ← one module per item type + registry
-tools/
-  bundle.mjs                ← npm run bundle
-  deploy.mjs                ← npm run deploy → dist/ModMenu.zip
+tools/                      ← node: bundle.mjs, deploy.mjs
+tooling/                    ← C# CLI, Studio, tests (not in ModMenu.zip)
 ```
 
 `widgets/*.lua` are auto-bundled. New `core/` or `shell/` files still need a `MODULES` row in `tools/bundle.mjs`.
@@ -89,11 +91,12 @@ ModMenu.Init({
     instanceId = "YourHostMod", -- unique FName tag (Live View: ModMenu_Root_YourHostMod_1)
     key = Key.F6,
     keyHint = "F6",
-    dock = "left", -- "left" | "right"
+    dock = "left", -- "left" | "right" | "top" | "bottom" (starting edge; user can change)
     -- theme = "dark", -- charcoal panel; omit for the current ("light") look
     -- tabs = { "Cheats", "Give", "Keybinds" }, -- omit = single scroll
     -- debug = true, -- verbose [ModMenu] traces (open/close, collapse, register, click path)
     -- pointerMode = "touch", -- Ally: checkbox as tap buttons; ignore late LMB latch
+    -- showClose = false, -- hide the title-row Close button (on by default)
     -- inputBackend = "engine", -- opt-in when RegisterKeyBind does not fire
     -- consoleCommand = "modmenu",
     -- cursorMode = "modmenu", -- overlay pointer when the game hides the engine cursor
@@ -192,10 +195,10 @@ Configure and bind this mod’s shell. Safe to call more than once (updates conf
 | `keyName` | from `keyHint` | Unreal `FKey` name for the `engine` backend (e.g. `"F7"`). Required when `keyHint` is not a plain name. |
 | `inputBackend` | `"ue4ss"` | `"ue4ss"` (RegisterKeyBind) or `"engine"` (poll `IsInputKeyDown`). Opt-in — no auto-detect. Same backend for toggle **and** LMB. |
 | `consoleCommand` | `nil` | Optional. Registers `name [toggle/open/close]`. Do not also register the same command in the host. |
-| `dock` | `"right"` | `"left"` \| `"right"` |
-| `widthFrac` | `0.32` | Panel width as % of viewport |
-| `topFrac` / `bottomFrac` | `0.05` | Vertical margins |
-| `rightFrac` | `0.01` | Edge margin (both docks) |
+| `dock` | `"right"` | `"left"` \| `"right"` \| `"top"` \| `"bottom"`. Author default. Header dropdown offers all four. Same panel footprint, rotated 90° for top/bottom (`widthFrac` is thickness). |
+| `widthFrac` | `0.32` | Panel thickness as % of viewport (width on left/right; height on top/bottom) |
+| `topFrac` / `bottomFrac` | `0.05` | Long-axis margins (vertical on left/right; horizontal on top/bottom) |
+| `rightFrac` | `0.01` | Thickness-edge gap (all four docks) |
 | `fontScale` | `1` | Multiplies the default font sizes (same idea as UE4SS `GuiConsoleFontScaling`). Prefer this for per-game **desktop** tuning. Explicit `fontTitle` / … still win and are not scaled by this. |
 | `fontTitle` / `fontHint` / `fontItem` / `fontSection` / `fontDropdown` | 22 / 14 / 16 / 18 / 15 | Optional absolute sizes. Omit and use `fontScale` unless one role needs a one-off size. `fontDropdown` is header + option rows. |
 | `touchFontScale` | `1.75` | Used only when `pointerMode` is `"touch"`. Multiplies resolved fonts **and** desktop `widthFrac` (0.32 → ~0.56, cap 0.85). Mortal Shell 2 `fontItem = 10` becomes 18. Not stacked across later `Init` calls. |
@@ -209,6 +212,7 @@ Configure and bind this mod’s shell. Safe to call more than once (updates conf
 | `cursorHideClasses` | `nil` | Optional string array of UUserWidget class short names to collapse while the ModMenu cursor is shown (e.g. `{ "WB_Cursor_C" }`). Host-supplied; empty by default. Class defaults (`Default__…`) are skipped. On close, each widget is restored to the visibility it had before hide — not forced visible. |
 | `debug` | `false` | Verbose `[ModMenu]` traces (open/close, collapse, register, click routing). Failures always print. |
 | `pointerMode` | `"mouse"` | `"mouse"` (default) or `"touch"` / `"handheld"` (same). Touch: ignore delayed LMB latch; checkbox ON/OFF buttons; fonts + panel width × `touchFontScale`; 28px scrollbar; 56px-tall tab strip with extra gap under Dock. Hosts keep `{ type = "checkbox" }` and desktop `font*` / `widthFrac`. |
+| `showClose` | `true` | Title-row **Close** button (same path as the toggle key). Default on so you can dismiss with the mouse. Pass `false` to hide. |
 
 Also installs viewport hooks and the input backend (`core/input.lua`): toggle + LMB click latch. Default `ue4ss` uses `RegisterKeyBind`. Pass `inputBackend = "engine"` on games where those binds never fire (e.g. Code Vein 2); that polls Unreal `IsInputKeyDown` for the toggle key and left mouse.
 
@@ -398,11 +402,73 @@ ModMenu.IsOpen()           -- boolean
 ModMenu.ListSections()     -- { "MaxRank", "Items", ... }
 ModMenu.SetDock("left")
 ModMenu.GetDock()
+ModMenu.OnDockChange(function(side)
+    -- persist with the host store if you want it next launch
+end)
 ModMenu.SetTab("Give")     -- requires Init({ tabs = ... })
 ModMenu.GetTab()           -- nil when tabs are off
 ```
 
 `OnOpen` runs each time the menu finishes opening (after the shell is visible). Register as many callbacks as you need (e.g. one per feature).
+
+`OnDockChange` runs after the header picker or `SetDock` applies an edge. ModMenu does not write disk; hosts that want memory across launches save `side` and pass it back on `Init({ dock = ... })`.
+
+### Persistence
+
+Optional JSON store, same singleton either way:
+
+```lua
+local ModMenu = require("ModMenu.ModMenu")
+local ConfigManager = ModMenu.ConfigManager
+-- or: require("ModMenu.ConfigManager")
+
+ConfigManager.Init({
+    id = "YourHostMod",
+    defaults = { dock = "right", keybinds = {} },
+})
+
+local dock = ConfigManager.Get("dock")
+ModMenu.Init({ dock = dock })
+ModMenu.OnDockChange(function(side)
+    ConfigManager.Set("dock", side)
+end)
+```
+
+`Init` the store **before** `ModMenu.Init` when launch options (dock, toggle key) come from disk. `Get` / `Set` / `Save` / `File` match the old standalone ConfigManager. Path is `Mods/<id>/config.json`. Hosts own what is written; ModMenu does not auto-save.
+
+### Tests (no game)
+
+CI (`.github/workflows/ci.yml`) runs `dotnet test tooling/ModMenu.sln` on every pull request and push to `main`. Locally:
+
+```bash
+npm test
+# or: dotnet test tooling/ModMenu.sln
+dotnet run --project tooling/CLI -- test
+dotnet run --project tooling/CLI -- detect
+```
+
+Lua specs live in `tooling/lua/` (store, dock math, options). Headless Studio window tests lock the picker, remembered last game, Refresh rebind, the **Run Lua tests** log, and the last-run pass/fail banner.
+
+### Studio
+
+![ModMenu Studio after Launch and test — Mortal Shell II, in-game harness passed (70 checks)](GithubAssets/ModMenuStudio-hero.png)
+
+*ModMenu Studio: pick a UE4SS game, run the no-game Lua suite, or **Launch and test**. The last-run bar stays on screen (here: in-game harness passed, 70 checks).*
+
+```bash
+dotnet run --project tooling/Studio
+# or: npm run studio
+```
+
+In-game **Launch and test** stays local (needs Steam + a UE4SS game). `dotnet run --project tooling/CLI -- test --game "Fatal Claw"` (or Studio **Launch and test**) deploys `examples/ModMenuHarness.lua` (left) and `examples/ModMenuHarnessB.lua` (right) as two enabled mods. After a **30s settle**, A opens and runs the Lua feature suite, then closes. B waits for A's results, opens on the right, and checks that it is a separate `instanceId` / serial / tab session (not dual-open). Polls both `ue4ss/ModMenuHarness-results.json` and `ModMenuHarnessB-results.json` for 120s (240s with `--play-live`), then closes the game (if this run launched it) and removes only the harness mods.
+
+`--play-live` writes `play-live.txt` on the host so the suite steps with `ExecuteInGameThreadWithDelay` (you can watch tabs/dock change). UE4SS must already be installed. FatalClawMod and `config.json` are left alone. `examples/ModMenuHost.lua` stays the human dummy; the harness is the suite.
+
+### Releases
+
+Official downloads are produced by `.github/workflows/ci.yml` on a `v*` tag (`vMAJOR.MINOR.PATCH`, for example `v1.4.0`). Tags `1.0.0`–`1.3.1` predate CI and stay as history.
+
+The player artifact is `ModMenu.zip`. The same release also attaches unsigned `ModMenu.Studio.exe` and `modmenu.exe`; SmartScreen may warn on first run. `npm run deploy` and `tooling/deploy.ps1` are for local iteration only — do not upload a local publish as the public build.
 
 ---
 
@@ -730,7 +796,7 @@ Heavy work on the click stack can hitch or crash — delay off the open path whe
 1. **Per-mod shell** — each Lua mod has its own ModMenu state (`require` is not shared across mods). Multiple mods may each `Init` an independent panel. UObject roots are named `ModMenu_Root_<instanceId>_<n>` using a `ModRef` serial (`ModMenu.NextInstanceId`) so they never collide under `GameInstance`.
 2. **Toggle keys** — prefer a unique `key` / `keyHint` per mod. Claims are stored as `ModMenu.KeyClaim.<keyHint>`; clashes log **KEY CONFLICT**. On the `ue4ss` backend, UE4SS may fire every binder on that key (both menus toggle — useful for same-author dual docks, confusing for unrelated mods). On `engine`, each shell polls independently.
 3. **Input** — while open, uses GameAndUI + mouse cursor. Buttons / dock / dropdowns fire from `UButton:IsPressed()` (rising edge, 16ms poll) plus the LMB latch + `IsHovered()` fallback (touch also keeps the last hovered widget briefly and retries an unclaimed latch). Desktop checkboxes poll persistent `IsChecked()`. `pointerMode = "touch"` renders checkboxes as ON/OFF buttons so a finger tap uses the same press-edge path. The toggle key uses `Init inputBackend`: `ue4ss` (`RegisterKeyBind`) or `engine` (poll `IsInputKeyDown`). PlayerController often does **not** see LMB while Slate owns the mouse, so engine-backend menus must not rely on the LMB latch alone. Closing one menu does not force GameOnly while another ModMenu is still open (`ModMenu.OpenCount`). `ClientRestart` / `DestroyShell` do not touch input unless this instance had the menu open. On close, `GameOnly` is applied only if the game had no cursor when we opened (mouse-look); hub/inventory cursors are left alone. Camera look is **not** locked unless `Init({ ignoreLook = true })`. When the engine cursor is suppressed, opt in with `cursorMode = "modmenu"` for a HitTestInvisible overlay pointer (`core/cursor.lua`); optionally pass `cursorHideClasses` to collapse game cursor widgets while open (class defaults are skipped; prior visibility is restored on close). Overlay mode does not treat a hidden engine cursor as stolen (that would re-apply GameAndUI every tick and break checkboxes / text fields). A later `Init` that changes `cursorMode` / `cursorScale` / `cursorHideClasses` rebuilds the overlay if it already exists.
-4. **Dock** — left/right presets only (header button + `SetDock`). No free drag. Session only (not saved to disk).
+4. **Dock** — author `Init({ dock })` is the starting edge. Header dropdown offers Left / Right / Top / Bottom (`SetDock` accepts any of the four). Same rectangle rotated 90° (`widthFrac` stays thickness). No free drag. Session only unless the host persists (`OnDockChange` + saved `Init` dock).
 5. **Scroll** — the docked panel is a fixed viewport; section content lives in a ScrollBox (mouse wheel). Use `labelWidth` on `number` / `textinput` so amount rows line up like a table.
 6. **FNames** — shell names include `instanceId`; content rebuilds bump an internal generation after `ClearChildren`. Collapse / fold expand/collapse show/hide a body and do not rebuild. Prefer `SetOptions` on searchable lists over constant full rebuilds. Menu close/open keeps the UMG tree (no rebuild) so large sections (Give, keybinds) do not respawn on every toggle. `Register` / non-searchable `SetOptions` rebuild **while the menu is open**, and mark the tree dirty if they run while it is closed so the next `Open` rebuilds. `ClientRestart` destroys the shell and restores it if it was open.
 7. **Large lists** — keep `maxVisible` bounded; filter narrows the working set. Building thousands of UButtons at once is risky.
@@ -759,7 +825,7 @@ ModMenu.Init({
 })
 ```
 
-Touch mode: checkboxes are ON/OFF buttons (`press-edge`); delayed LMB latch ignored; fonts and `widthFrac` × `touchFontScale` (default 1.75); ScrollBox thumb is 28px and always shown so it is hittable (content-drag is a later pass — buttons capture the pointer). A **Close** button sits on the right of the title row so you can dismiss the menu without opening the on-screen keyboard for the toggle key. The tab strip uses 56px-tall buttons and extra gap under Dock so a finger aiming for Cheats / Give does not hit Dock Left/Right. Desktop tabs stay compact.
+Touch mode: checkboxes are ON/OFF buttons (`press-edge`); delayed LMB latch ignored; fonts and `widthFrac` × `touchFontScale` (default 1.75); ScrollBox thumb is 28px and always shown so it is hittable (content-drag is a later pass — buttons capture the pointer). The title-row **Close** button is on for every pointer mode (`showClose = false` to hide). The tab strip uses 56px-tall buttons and extra gap under Dock so a finger aiming for Cheats / Give does not hit the Dock button. Desktop tabs stay compact.
 
 ---
 
@@ -830,7 +896,8 @@ A fuller dummy (tabs, every widget, log-only clicks) is `examples/ModMenuHost.lu
 
 ## See also
 
-- Install / Nexus zip: `npm run deploy` → `dist/ModMenu.zip`
+- Install / Nexus zip: [GitHub Releases](https://github.com/mattdavida/ue4ss-ModMenu/releases) (`ModMenu.zip`); local: `npm run deploy`
+- CI: `.github/workflows/ci.yml`
 - UX / north star: `vision.md`
 - Widget registry: `widgets/init.lua`
 - Public API facade: `ModMenu.lua`

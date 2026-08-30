@@ -7,6 +7,7 @@
     -- inputBackend = "engine" when RegisterKeyBind does not fire (e.g. Code Vein 2)
     -- cursorMode = "modmenu" when the game suppresses the engine cursor
     -- pointerMode = "touch" on handheld (checkbox buttons + ignore delayed latch)
+    -- showClose = false to hide the title-row Close button (on by default)
     ModMenu.Register({
       id = "MyMod",
       title = "My Mod",
@@ -32,18 +33,20 @@
         { type = "separator" },
       },
     })
-    ModMenu.SetDock("left") -- or Init({ dock = "left" })
+    ModMenu.SetDock("left") -- or Init({ dock = "left"|"right"|"top"|"bottom" })
 
   Per-mod shell: each Lua mod that Init()s gets its own panel + hotkey.
   UObject names / viewport Z are allocated via ModRef shared vars so two mods
   never collide on ModMenu_Root_1 under the same GameInstance.
 
-  Dock presets: Left / Right via header button (session only; no free drag).
+  Dock presets: Init({ dock }) is the starting edge. Header dropdown offers
+  Left / Right / Top / Bottom. Session only unless the host persists (OnDockChange).
   Collapsible sections: Register({ collapsible = true, collapsed = true }).
   Nested fold: { type = "fold", id, label, collapsed = true, items = { ... } }.
   Theme (authors): Init({ theme = "light" | "dark" }) — light is the current look.
   Tabs: Init({ tabs = { "Cheats", "Give" } }) + Register({ tab = "Cheats", ... }).
   Confirm: button { confirm = { title, message } } or ModMenu.Confirm({ onConfirm = fn }).
+  Persistence: optional ModMenu.ConfigManager (Init / Get / Set). Host-owned; not auto-wired.
 
   Internals: core/ helpers + widgets/ registry (see README.md).
 ]]
@@ -60,8 +63,10 @@ local Tabs = require("ModMenu.shell.tabs")
 local Lifecycle = require("ModMenu.shell.lifecycle")
 local Registry = require("ModMenu.shell.registry")
 local Confirm = require("ModMenu.shell.confirm")
+local ConfigStore = require("ModMenu.core.store")
 
 local ModMenu = {}
+ModMenu.ConfigManager = ConfigStore
 
 local Debug = Util.Debug
 
@@ -70,6 +75,9 @@ local config = Config.New()
 --- Callbacks fired after the menu finishes opening (feature modules use for lazy init).
 local onOpenCallbacks = {} ---@type function[]
 
+--- Callbacks fired after SetDock / header picker (hosts persist if they want).
+local onDockCallbacks = {} ---@type function[]
+
 local initialized = false
 
 local S = Session.New({
@@ -77,6 +85,7 @@ local S = Session.New({
     sections = {},
     values = {},
     onOpenCallbacks = onOpenCallbacks,
+    onDockCallbacks = onDockCallbacks,
 })
 
 InputMode.Bind({
@@ -199,8 +208,8 @@ function ModMenu.GetInstanceSerial()
     return Instance.GetSerial()
 end
 
---- Pin the panel to the left or right edge (session only; no free drag).
----@param side string "left"|"right"
+--- Pin the panel to an edge (session only; no free drag).
+---@param side string "left"|"right"|"top"|"bottom"
 function ModMenu.SetDock(side)
     Dock.Set(S, side)
 end
@@ -324,6 +333,15 @@ function ModMenu.OnOpen(fn)
         error("ModMenu.OnOpen expects a function")
     end
     table.insert(onOpenCallbacks, fn)
+end
+
+--- Register a callback invoked after the dock edge changes (picker or SetDock).
+---@param fn fun(side: string)
+function ModMenu.OnDockChange(fn)
+    if type(fn) ~= "function" then
+        error("ModMenu.OnDockChange expects a function")
+    end
+    table.insert(onDockCallbacks, fn)
 end
 
 function ModMenu.Open()

@@ -10,11 +10,11 @@ function M.New()
     return {
         title = "Mod Menu",
         key = nil, -- set in Init; default Key.F6
-        dock = "right", -- "left" | "right" (session preset; no free drag)
+        dock = "right", -- "left" | "right" | "top" | "bottom" (author default; user can change)
         widthFrac = 0.32,
         topFrac = 0.05,
         bottomFrac = 0.05,
-        rightFrac = 0.01, -- edge margin used for both left and right docks
+        rightFrac = 0.01, -- thickness-edge gap (all four docks)
         theme = "light", -- "light" (current look) | "dark" (charcoal panel)
         colors = Theme.Preset("light"),
         fontScale = 1, -- multiplies the default font sizes (per-game; 1 = stock)
@@ -31,6 +31,7 @@ function M.New()
         consoleCommand = nil, -- optional console command (toggle|open|close)
         cursorMode = "engine", -- "engine" | "modmenu" (opt-in overlay pointer)
         pointerMode = "mouse", -- "mouse" | "touch" (longer latch ignore + checkbox buttons)
+        showClose = true, -- title-row Close (same path as the toggle key); pass false to hide
         touchFontScale = 1.75, -- extra multiply on resolved fonts + widthFrac when pointerMode is touch
         cursorScale = 1, -- overlay pointer multiplier (1 = native ~28x46; 2 = larger)
         cursorHideClasses = nil, -- optional string[] of UUserWidget class names to collapse while open
@@ -41,8 +42,8 @@ end
 
 function M.NormalizeDock(side)
     local d = string.lower(tostring(side or "right"))
-    if d == "left" then
-        return "left"
+    if d == "left" or d == "right" or d == "top" or d == "bottom" then
+        return d
     end
     return "right"
 end
@@ -334,6 +335,9 @@ function M.ApplyInit(config, opts, ctx)
     end
     if opts.pointerMode ~= nil then
         config.pointerMode = M.NormalizePointerMode(opts.pointerMode)
+    end
+    if opts.showClose ~= nil then
+        config.showClose = opts.showClose == true
     end
     if opts.touchFontScale ~= nil then
         config.touchFontScale = M.NormalizeTouchFontScale(opts.touchFontScale)

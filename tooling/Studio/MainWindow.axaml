@@ -1,0 +1,247 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ModMenu.Studio"
+        x:Class="ModMenu.Studio.MainWindow"
+        Title="ModMenu Studio"
+        Icon="/Assets/icon.ico"
+        Width="880"
+        Height="640"
+        MinWidth="720"
+        MinHeight="520"
+        Background="#0E1014"
+        WindowStartupLocation="CenterScreen"
+        RenderOptions.BitmapInterpolationMode="HighQuality"
+        KeyDown="OnWindowKeyDown">
+    <Panel>
+        <Grid Margin="20" RowDefinitions="Auto,*" RowSpacing="16">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="ModMenu Studio"
+                               FontSize="20"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Run the no-game Lua suite, or launch a UE4SS game and test."
+                               Foreground="{StaticResource AppMuted}"
+                               FontSize="13" />
+                </StackPanel>
+                <Button x:Name="SelectGameButton"
+                        Grid.Column="1"
+                        Classes="navGame"
+                        Click="OnSelectGameClick"
+                        ToolTip.Tip="Change game">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Panel x:Name="NavGlyph" Width="24" Height="24" IsVisible="False">
+                            <Border x:Name="NavIconBorder"
+                                    CornerRadius="6"
+                                    ClipToBounds="True"
+                                    IsVisible="False">
+                                <Image x:Name="NavIcon"
+                                       Width="24"
+                                       Height="24"
+                                       Stretch="UniformToFill" />
+                            </Border>
+                            <Border x:Name="NavInitialBorder"
+                                    CornerRadius="6"
+                                    Background="#2400A3FF"
+                                    IsVisible="False">
+                                <TextBlock x:Name="NavInitial"
+                                           FontWeight="Bold"
+                                           FontSize="11"
+                                           Foreground="{StaticResource AppAccent}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Border>
+                        </Panel>
+                        <TextBlock x:Name="SelectGameLabel"
+                                   Text="&lt;select game&gt;"
+                                   VerticalAlignment="Center"
+                                   FontWeight="SemiBold" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <Grid Grid.Row="1" RowDefinitions="Auto,*" RowSpacing="16">
+                <Border Grid.Row="0"
+                        CornerRadius="10"
+                        Background="#10FFFFFF"
+                        BorderBrush="#14FFFFFF"
+                        BorderThickness="1"
+                        Padding="16,14">
+                    <StackPanel Spacing="12">
+                        <StackPanel Spacing="4">
+                            <TextBlock x:Name="SelectedName"
+                                       Text="No game selected"
+                                       FontSize="16"
+                                       FontWeight="SemiBold" />
+                            <TextBlock x:Name="SelectedPath"
+                                       Text="Choose a game from the navbar to remember an install."
+                                       Foreground="{StaticResource AppMuted}"
+                                       FontSize="12"
+                                       TextWrapping="Wrap" />
+                            <TextBlock x:Name="SelectedStatus"
+                                       Text=""
+                                       Foreground="{StaticResource AppMuted}"
+                                       FontSize="13" />
+                        </StackPanel>
+                        <WrapPanel ItemSpacing="10" LineSpacing="10">
+                            <Button x:Name="LuaTestsButton"
+                                    Classes="accent"
+                                    Content="Run Lua tests"
+                                    MinWidth="140"
+                                    Click="OnRunLuaTestsClick"
+                                    ToolTip.Tip="No-game suite (same as modmenu test)." />
+                            <Button x:Name="InGameTestButton"
+                                    Content="Launch and test"
+                                    MinWidth="150"
+                                    Click="OnInGameTestClick"
+                                    IsEnabled="False"
+                                    ToolTip.Tip="Deploy Harness A (left) and B (right), launch via Steam, poll both results, then remove the hosts." />
+                            <Button x:Name="InGameLiveTestButton"
+                                    Content="Launch and test live"
+                                    MinWidth="170"
+                                    Click="OnInGameLiveTestClick"
+                                    IsEnabled="False"
+                                    ToolTip.Tip="Same as Launch and test, but the suite steps with delays so you can watch (modmenu test --play-live)." />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="1"
+                        CornerRadius="10"
+                        Background="#10FFFFFF"
+                        BorderBrush="#14FFFFFF"
+                        BorderThickness="1"
+                        Padding="16,14"
+                        ClipToBounds="True">
+                    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
+                        <TextBlock Text="Log"
+                                   Foreground="{StaticResource AppMuted}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold" />
+                        <Border x:Name="ResultBanner"
+                                Grid.Row="1"
+                                Classes="result"
+                                IsVisible="False">
+                            <TextBlock x:Name="ResultBannerText"
+                                       FontWeight="SemiBold"
+                                       FontSize="14"
+                                       TextWrapping="Wrap" />
+                        </Border>
+                        <TextBox x:Name="LogBox"
+                                 Grid.Row="2"
+                                 Classes="log"
+                                 IsReadOnly="True"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 Foreground="{StaticResource AppMuted}"
+                                 FontFamily="Cascadia Mono, Consolas, monospace"
+                                 FontSize="13"
+                                 VerticalContentAlignment="Top"
+                                 HorizontalContentAlignment="Left" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <Grid x:Name="PickerOverlay" IsVisible="False" ZIndex="20">
+            <Border Background="#CC0E1014"
+                    PointerPressed="OnPickerBackdropPressed" />
+            <Border Width="440"
+                    MaxHeight="560"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    CornerRadius="12"
+                    Background="#161A22"
+                    BorderBrush="#22FFFFFF"
+                    BorderThickness="1"
+                    Padding="16">
+                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
+                        <TextBlock Text="Select a UE4SS game"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                        <Button x:Name="RefreshGamesButton"
+                                Grid.Column="1"
+                                Classes="refresh"
+                                Content="Refresh"
+                                Click="OnRefreshGamesClick"
+                                ToolTip.Tip="Rescan Steam for games with UE4SS installed." />
+                        <Button Grid.Column="2"
+                                Classes="close"
+                                Content="✕"
+                                Click="OnPickerCloseClick"
+                                ToolTip.Tip="Close" />
+                    </Grid>
+                    <TextBox x:Name="SearchBox"
+                             Grid.Row="1"
+                             PlaceholderText="Search a game..."
+                             TextChanged="OnSearchChanged" />
+                    <Border Grid.Row="2"
+                            CornerRadius="10"
+                            Background="#10FFFFFF"
+                            BorderBrush="#14FFFFFF"
+                            BorderThickness="1"
+                            ClipToBounds="True"
+                            Padding="4"
+                            MinHeight="280">
+                        <Panel>
+                            <ListBox x:Name="GamesList"
+                                     SelectionMode="Single"
+                                     SelectionChanged="OnPickerGameSelected">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="local:GameRow">
+                                        <Border Classes="GameRow"
+                                                CornerRadius="8"
+                                                Padding="8,6"
+                                                ToolTip.Tip="{Binding InstallPath}">
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                                <Panel Width="32" Height="32">
+                                                    <Border CornerRadius="7"
+                                                            ClipToBounds="True"
+                                                            IsVisible="{Binding HasIcon}">
+                                                        <Image Source="{Binding Icon}"
+                                                               Width="32"
+                                                               Height="32"
+                                                               Stretch="UniformToFill" />
+                                                    </Border>
+                                                    <Border CornerRadius="7"
+                                                            Background="#2400A3FF"
+                                                            IsVisible="{Binding !HasIcon}">
+                                                        <TextBlock Text="{Binding Initial}"
+                                                                   FontWeight="Bold"
+                                                                   FontSize="14"
+                                                                   Foreground="{StaticResource AppAccent}"
+                                                                   HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center" />
+                                                    </Border>
+                                                </Panel>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding Name}"
+                                                           FontSize="14"
+                                                           FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <TextBlock x:Name="EmptyGamesHint"
+                                       IsVisible="False"
+                                       Text="Install UE4SS into a game with UE4SS Installer, then Refresh."
+                                       Foreground="{StaticResource AppMuted}"
+                                       FontSize="13"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Margin="24" />
+                        </Panel>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+    </Panel>
+</Window>

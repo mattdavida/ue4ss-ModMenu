@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "bundle": "node tools/bundle.mjs",
-    "deploy": "node tools/deploy.mjs"
+    "deploy": "node tools/deploy.mjs",
+    "test": "dotnet test tooling/ModMenu.sln --nologo",
+    "studio": "dotnet run --project tooling/Studio --no-launch-profile"
   }
 }
