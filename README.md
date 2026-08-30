@@ -96,6 +96,7 @@ ModMenu.Init({
     -- tabs = { "Cheats", "Give", "Keybinds" }, -- omit = single scroll
     -- debug = true, -- verbose [ModMenu] traces (open/close, collapse, register, click path)
     -- pointerMode = "touch", -- Ally: checkbox as tap buttons; ignore late LMB latch
+    -- showClose = false, -- hide the title-row Close button (on by default)
     -- inputBackend = "engine", -- opt-in when RegisterKeyBind does not fire
     -- consoleCommand = "modmenu",
     -- cursorMode = "modmenu", -- overlay pointer when the game hides the engine cursor
@@ -211,6 +212,7 @@ Configure and bind this mod’s shell. Safe to call more than once (updates conf
 | `cursorHideClasses` | `nil` | Optional string array of UUserWidget class short names to collapse while the ModMenu cursor is shown (e.g. `{ "WB_Cursor_C" }`). Host-supplied; empty by default. Class defaults (`Default__…`) are skipped. On close, each widget is restored to the visibility it had before hide — not forced visible. |
 | `debug` | `false` | Verbose `[ModMenu]` traces (open/close, collapse, register, click routing). Failures always print. |
 | `pointerMode` | `"mouse"` | `"mouse"` (default) or `"touch"` / `"handheld"` (same). Touch: ignore delayed LMB latch; checkbox ON/OFF buttons; fonts + panel width × `touchFontScale`; 28px scrollbar; 56px-tall tab strip with extra gap under Dock. Hosts keep `{ type = "checkbox" }` and desktop `font*` / `widthFrac`. |
+| `showClose` | `true` | Title-row **Close** button (same path as the toggle key). Default on so you can dismiss with the mouse. Pass `false` to hide. |
 
 Also installs viewport hooks and the input backend (`core/input.lua`): toggle + LMB click latch. Default `ue4ss` uses `RegisterKeyBind`. Pass `inputBackend = "engine"` on games where those binds never fire (e.g. Code Vein 2); that polls Unreal `IsInputKeyDown` for the toggle key and left mouse.
 
@@ -448,7 +450,7 @@ dotnet run --project tooling/Studio
 
 Lua specs live in `tooling/lua/` (store, dock math, options). Studio is a picker over the same harness. In-game **Launch and test** stays local (needs Steam + a UE4SS game).
 
-In-game: `dotnet run --project tooling/CLI -- test --game "Fatal Claw"` (or Studio **Launch and test**) deploys `examples/ModMenuHarness.lua`, launches via Steam, waits **30s after the host loads** before `Open`, runs the Lua feature suite (each check logs PASS/FAIL), polls `ue4ss/ModMenuHarness-results.json` for 120s (240s with `--play-live`), then closes the game (if this run launched it) and removes only the harness mod.
+In-game: `dotnet run --project tooling/CLI -- test --game "Fatal Claw"` (or Studio **Launch and test**) deploys `examples/ModMenuHarness.lua` (left) and `examples/ModMenuHarnessB.lua` (right) as two enabled mods. After a **30s settle**, A opens and runs the Lua feature suite, then closes. B waits for A's results, opens on the right, and checks that it is a separate `instanceId` / serial / tab session (not dual-open). Polls both `ue4ss/ModMenuHarness-results.json` and `ModMenuHarnessB-results.json` for 120s (240s with `--play-live`), then closes the game (if this run launched it) and removes only the harness mods.
 
 `--play-live` writes `play-live.txt` on the host so the suite steps with `ExecuteInGameThreadWithDelay` (you can watch tabs/dock change). UE4SS must already be installed. FatalClawMod and `config.json` are left alone. `examples/ModMenuHost.lua` stays the human dummy; the harness is the suite.
 
@@ -813,7 +815,7 @@ ModMenu.Init({
 })
 ```
 
-Touch mode: checkboxes are ON/OFF buttons (`press-edge`); delayed LMB latch ignored; fonts and `widthFrac` × `touchFontScale` (default 1.75); ScrollBox thumb is 28px and always shown so it is hittable (content-drag is a later pass — buttons capture the pointer). A **Close** button sits on the right of the title row so you can dismiss the menu without opening the on-screen keyboard for the toggle key. The tab strip uses 56px-tall buttons and extra gap under Dock so a finger aiming for Cheats / Give does not hit the Dock button. Desktop tabs stay compact.
+Touch mode: checkboxes are ON/OFF buttons (`press-edge`); delayed LMB latch ignored; fonts and `widthFrac` × `touchFontScale` (default 1.75); ScrollBox thumb is 28px and always shown so it is hittable (content-drag is a later pass — buttons capture the pointer). The title-row **Close** button is on for every pointer mode (`showClose = false` to hide). The tab strip uses 56px-tall buttons and extra gap under Dock so a finger aiming for Cheats / Give does not hit the Dock button. Desktop tabs stay compact.
 
 ---
 

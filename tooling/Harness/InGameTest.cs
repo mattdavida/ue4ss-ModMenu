@@ -14,9 +14,10 @@ public static class InGameTest
         }
 
         var resultsPath = Ue4ssLayout.ResultsPath(game.Win64Path);
+        var peerPath = Ue4ssLayout.PeerResultsPath(game.Win64Path);
         try
         {
-            log("Deploying ModMenuHarness (before launch)…");
+            log("Deploying ModMenuHarness + Harness B (before launch)…");
             HostDeploy.Deploy(game.Win64Path, repo, log, options.PlayLive);
 
             if (!options.SkipLaunch)
@@ -30,16 +31,27 @@ public static class InGameTest
                 log("Skip launch — waiting for an already-running game.");
             }
 
-            var json = WaitForResults(resultsPath, options, log);
-            if (json is null)
+            var files = WaitForResults([resultsPath, peerPath], options, log);
+            var primaryJson = files[0];
+            var peerJson = files[1];
+            if (primaryJson is null)
             {
                 return Fail(
                     $"No {Ue4ssLayout.ResultsFileName} after {options.TotalTimeout.TotalSeconds:0}s. " +
                     "Is the game in-world, and did UE4SS load ModMenuHarness?");
             }
 
-            log("Results file found. Evaluating…");
-            return InGameResults.Evaluate(json);
+            if (peerJson is null)
+            {
+                return Fail(
+                    $"No {Ue4ssLayout.PeerResultsFileName} after {options.TotalTimeout.TotalSeconds:0}s. " +
+                    "Harness A finished; did UE4SS load ModMenuHarnessB?");
+            }
+
+            log("Results files found. Evaluating A then B…");
+            return InGameResults.Combine(
+                InGameResults.Evaluate(primaryJson),
+                InGameResults.Evaluate(peerJson, InGameResultExpect.Peer));
         }
         finally
         {
@@ -55,7 +67,7 @@ public static class InGameTest
                 }
             }
 
-            log("Removing ModMenuHarness…");
+            log("Removing harness mods…");
             try
             {
                 HostDeploy.Remove(game.Win64Path, log);
@@ -67,11 +79,13 @@ public static class InGameTest
         }
     }
 
-    private static string? WaitForResults(string path, InGameTestOptions options, Action<string> log)
+    private static string?[] WaitForResults(string[] paths, InGameTestOptions options, Action<string> log)
     {
+        var found = new string?[paths.Length];
         var deadline = DateTime.UtcNow + options.TotalTimeout;
         var nextPing = DateTime.UtcNow;
         var round = 1;
+        var announcedA = false;
 
         while (DateTime.UtcNow < deadline)
         {
@@ -82,24 +96,42 @@ public static class InGameTest
                 round++;
             }
 
-            if (File.Exists(path))
+            for (var i = 0; i < paths.Length; i++)
             {
-                try
-                {
-                    var text = File.ReadAllText(path);
-                    if (!string.IsNullOrWhiteSpace(text))
-                        return text;
-                }
-                catch (IOException)
-                {
-                    // host may still be writing
-                }
+                if (found[i] is not null)
+                    continue;
+                found[i] = TryReadResults(paths[i]);
             }
+
+            if (!announcedA && found[0] is not null)
+            {
+                log("Harness A results found — waiting for Harness B…");
+                announcedA = true;
+            }
+
+            if (found.All(text => text is not null))
+                return found;
 
             Thread.Sleep(options.PollInterval);
         }
 
-        return null;
+        return found;
+    }
+
+    private static string? TryReadResults(string path)
+    {
+        if (!File.Exists(path))
+            return null;
+
+        try
+        {
+            var text = File.ReadAllText(path);
+            return string.IsNullOrWhiteSpace(text) ? null : text;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     private static InGameResults Fail(string message)

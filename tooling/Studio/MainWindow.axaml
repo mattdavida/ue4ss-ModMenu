@@ -3,6 +3,7 @@
         xmlns:local="clr-namespace:ModMenu.Studio"
         x:Class="ModMenu.Studio.MainWindow"
         Title="ModMenu Studio"
+        Icon="/Assets/icon.ico"
         Width="880"
         Height="640"
         MinWidth="720"
@@ -92,7 +93,7 @@
                                     MinWidth="150"
                                     Click="OnInGameTestClick"
                                     IsEnabled="False"
-                                    ToolTip.Tip="Deploy ModMenuHarness, launch via Steam, poll results, then remove the host." />
+                                    ToolTip.Tip="Deploy Harness A (left) and B (right), launch via Steam, poll both results, then remove the hosts." />
                             <Button x:Name="InGameLiveTestButton"
                                     Content="Launch and test live"
                                     MinWidth="170"
@@ -146,12 +147,17 @@
                     BorderThickness="1"
                     Padding="16">
                 <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
-                    <Grid ColumnDefinitions="*,Auto">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
                         <TextBlock Text="Select a UE4SS game"
                                    FontSize="16"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center" />
                         <Button Grid.Column="1"
+                                Classes="refresh"
+                                Content="Refresh"
+                                Click="OnRefreshGamesClick"
+                                ToolTip.Tip="Rescan Steam for games with UE4SS installed." />
+                        <Button Grid.Column="2"
                                 Classes="close"
                                 Content="✕"
                                 Click="OnPickerCloseClick"
@@ -213,7 +219,7 @@
                             </ListBox>
                             <TextBlock x:Name="EmptyGamesHint"
                                        IsVisible="False"
-                                       Text="Install UE4SS into a game with UE4SS Installer, then reopen Studio."
+                                       Text="Install UE4SS into a game with UE4SS Installer, then Refresh."
                                        Foreground="{StaticResource AppMuted}"
                                        FontSize="13"
                                        TextWrapping="Wrap"

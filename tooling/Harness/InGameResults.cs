@@ -53,13 +53,39 @@ public sealed class InGameResults
         return result;
     }
 
-    public static InGameResults Evaluate(string json)
+    public static InGameResults Combine(InGameResults primary, InGameResults peer)
     {
+        var failures = primary.Failures
+            .Concat(peer.Failures.Select(line => "Harness B: " + line))
+            .ToList();
+        return new InGameResults
+        {
+            Ok = failures.Count == 0,
+            Schema = Math.Max(primary.Schema, peer.Schema),
+            InstanceId = primary.InstanceId,
+            Dock = primary.Dock,
+            Open = primary.Open,
+            Tabs = primary.Tabs,
+            Tab = primary.Tab,
+            Sections = primary.Sections,
+            Passed = primary.Passed + peer.Passed,
+            Failed = primary.Failed + peer.Failed,
+            HostFailures = primary.HostFailures.Concat(peer.HostFailures).ToList(),
+            Errors = primary.Errors.Concat(peer.Errors).ToList(),
+            Failures = failures
+        };
+    }
+
+    public static InGameResults Evaluate(string json, InGameResultExpect? expect = null)
+    {
+        expect ??= InGameResultExpect.Primary;
         var result = Parse(json);
         var failures = new List<string>();
 
-        if (!string.Equals(result.InstanceId, HostDeploy.ModName, StringComparison.Ordinal))
-            failures.Add($"instanceId: got {result.InstanceId ?? "null"} want {HostDeploy.ModName}");
+        if (!string.Equals(result.InstanceId, expect.InstanceId, StringComparison.Ordinal))
+            failures.Add($"instanceId: got {result.InstanceId ?? "null"} want {expect.InstanceId}");
+        if (expect.Dock is not null && !string.Equals(result.Dock, expect.Dock, StringComparison.Ordinal))
+            failures.Add($"dock: got {result.Dock ?? "null"} want {expect.Dock}");
         if (!result.Open)
             failures.Add("menu was not open");
 
@@ -95,4 +121,18 @@ public sealed class InGameResults
         result.Ok = failures.Count == 0;
         return result;
     }
+}
+
+public sealed class InGameResultExpect
+{
+    public string InstanceId { get; init; } = HostDeploy.ModName;
+    public string? Dock { get; init; }
+
+    public static InGameResultExpect Primary { get; } = new();
+
+    public static InGameResultExpect Peer { get; } = new()
+    {
+        InstanceId = HostDeploy.PeerModName,
+        Dock = "right"
+    };
 }

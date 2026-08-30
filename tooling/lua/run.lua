@@ -120,6 +120,7 @@ local specs = {
     "store_spec.lua",
     "dock_spec.lua",
     "options_spec.lua",
+    "config_spec.lua",
 }
 
 local here = _REPO .. "/tooling/lua/"

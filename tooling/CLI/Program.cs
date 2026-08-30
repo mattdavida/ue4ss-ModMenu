@@ -110,7 +110,7 @@ static void PrintHelp()
 
           detect                         List Unreal Steam games
           test                           No-game Lua suite
-          test --game "Fatal Claw"       Deploy host, launch via Steam, poll results, remove host
+          test --game "Fatal Claw"       Deploy A (left) + B (right), launch, poll both, remove hosts
           test --game "Fatal Claw" --skip-launch
           test --game "Fatal Claw" --play-live   Step the suite in-game with delays so you can watch
 

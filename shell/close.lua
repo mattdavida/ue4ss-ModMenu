@@ -1,5 +1,5 @@
 --[[
-  ModMenu.shell.close — title-row Close button (touch). Same path as the toggle key.
+  ModMenu.shell.close — title-row Close button. Same path as the toggle key.
 ]]
 
 local Input = require("ModMenu.core.input")

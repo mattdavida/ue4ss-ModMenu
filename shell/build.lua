@@ -57,8 +57,8 @@ function M.BuildContent(S)
         titleSlot:SetVerticalAlignment(2)
     end)
 
-    -- Handheld: tap Close instead of opening the OSK for F6.
-    if config.pointerMode == "touch" then
+    -- Title-row Close: same path as the toggle key. Opt out with showClose = false.
+    if config.showClose ~= false then
         local closeBtn, closeLbl = CreateTextButton(
             titleRow,
             "ModMenu_Close_" .. suffix,

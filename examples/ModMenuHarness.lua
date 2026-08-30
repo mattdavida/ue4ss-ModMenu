@@ -1,9 +1,10 @@
 --[[
   ModMenuHarness — in-game feature suite.
 
-  After a 30s settle, opens the shell and exercises the public API
-  (widgets + Set/Get + tabs + dock + live chrome). Each check is printed
-  and written to ue4ss/ModMenuHarness-results.json.
+  After a 30s settle, opens the left shell and exercises the public API
+  (widgets + Set/Get + tabs + dock + live chrome). Then Close so Harness B
+  can open on the right. Dual-open is not asserted (known limit). Each check
+  is printed and written to ue4ss/ModMenuHarness-results.json.
 ]]
 
 local ModMenu = require("ModMenu.ModMenu")
@@ -169,6 +170,7 @@ local function WriteResults(errors)
         ok = failed == 0 and (errors == nil or #errors == 0),
         schema = 2,
         instanceId = INSTANCE,
+        serial = ModMenu.GetInstanceSerial(),
         dock = ModMenu.GetDock(),
         open = ModMenu.IsOpen(),
         tabs = { "Cheats", "Give", "Keybinds" },
@@ -488,6 +490,10 @@ local function RunSuite()
         AssertTrue("IsOpen after suite", ModMenu.IsOpen())
         Log(string.format("suite done: %d passed, %d failed", passed, failed))
         WriteResults({})
+        -- Close so Harness B can Open on the right. Do not keep both open.
+        pcall(function()
+            ModMenu.Close()
+        end)
     end)
 
     local i = 0

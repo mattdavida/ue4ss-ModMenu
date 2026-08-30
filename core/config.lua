@@ -31,6 +31,7 @@ function M.New()
         consoleCommand = nil, -- optional console command (toggle|open|close)
         cursorMode = "engine", -- "engine" | "modmenu" (opt-in overlay pointer)
         pointerMode = "mouse", -- "mouse" | "touch" (longer latch ignore + checkbox buttons)
+        showClose = true, -- title-row Close (same path as the toggle key); pass false to hide
         touchFontScale = 1.75, -- extra multiply on resolved fonts + widthFrac when pointerMode is touch
         cursorScale = 1, -- overlay pointer multiplier (1 = native ~28x46; 2 = larger)
         cursorHideClasses = nil, -- optional string[] of UUserWidget class names to collapse while open
@@ -334,6 +335,9 @@ function M.ApplyInit(config, opts, ctx)
     end
     if opts.pointerMode ~= nil then
         config.pointerMode = M.NormalizePointerMode(opts.pointerMode)
+    end
+    if opts.showClose ~= nil then
+        config.showClose = opts.showClose == true
     end
     if opts.touchFontScale ~= nil then
         config.touchFontScale = M.NormalizeTouchFontScale(opts.touchFontScale)

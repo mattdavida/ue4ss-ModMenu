@@ -19,9 +19,21 @@ public partial class MainWindow : Window
         Opened += (_, _) => ReloadGames();
     }
 
-    private void ReloadGames()
+    private void OnRefreshGamesClick(object? sender, RoutedEventArgs e)
+    {
+        if (_busy)
+            return;
+
+        Log("Refreshing UE4SS games…");
+        ReloadGames(keepPicker: true);
+        if (_games.Count > 0)
+            Log(_games.Count == 1 ? "Found 1 UE4SS game." : $"Found {_games.Count} UE4SS games.");
+    }
+
+    private void ReloadGames(bool keepPicker = false)
     {
         var settings = StudioSettings.Load();
+        var previous = _selected;
         _games.Clear();
         foreach (var game in GameCatalog.Load(settings).Where(game => game.HasUe4ss))
             _games.Add(ToRow(game));
@@ -31,20 +43,28 @@ public partial class MainWindow : Window
         if (_games.Count == 0)
         {
             ApplySelected(null, persist: false);
-            ShowPicker();
-            Log("No UE4SS games found. Install UE4SS with UE4SS Installer, then reopen Studio.");
+            if (!keepPicker)
+                ShowPicker();
+            Log("No UE4SS games found. Install UE4SS with UE4SS Installer, then Refresh.");
             return;
         }
 
-        var last = StudioSettings.MatchLast(_games.Select(row => row.Game).ToList(), settings);
-        if (last is not null)
+        DetectedGame? next = null;
+        if (previous is not null)
+            next = _games.Select(row => row.Game).FirstOrDefault(game => SameInstall(game, previous));
+        next ??= StudioSettings.MatchLast(_games.Select(row => row.Game).ToList(), settings);
+
+        if (next is not null)
         {
-            ApplySelected(last, persist: false);
+            ApplySelected(next, persist: false);
+            if (keepPicker)
+                ApplyFilter();
             return;
         }
 
         ApplySelected(null, persist: false);
-        ShowPicker();
+        if (!keepPicker)
+            ShowPicker();
         Log("Pick a UE4SS game to run Launch and test.");
     }
 
@@ -58,7 +78,7 @@ public partial class MainWindow : Window
     {
         var query = SearchBox.Text?.Trim() ?? "";
         var filtered = string.IsNullOrEmpty(query)
-            ? _games
+            ? _games.ToList()
             : _games.Where(row => row.Name.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
 
         _applyingPickerSelection = true;
@@ -71,7 +91,7 @@ public partial class MainWindow : Window
         SearchBox.IsVisible = _games.Count > 0;
         if (_games.Count == 0)
         {
-            EmptyGamesHint.Text = "Install UE4SS into a game with UE4SS Installer, then reopen Studio.";
+            EmptyGamesHint.Text = "Install UE4SS into a game with UE4SS Installer, then Refresh.";
             EmptyGamesHint.IsVisible = true;
         }
         else if (filtered.Count == 0)
@@ -140,7 +160,7 @@ public partial class MainWindow : Window
             NavInitialBorder.IsVisible = false;
             SelectedName.Text = _games.Count == 0 ? "No UE4SS game" : "No game selected";
             SelectedPath.Text = _games.Count == 0
-                ? "Install UE4SS into a game with UE4SS Installer, then reopen Studio."
+                ? "Install UE4SS into a game with UE4SS Installer, then Refresh."
                 : "Choose a UE4SS game from the navbar.";
             SelectedStatus.Text = "";
             SetInGameButtonsEnabled(false);

@@ -5,6 +5,7 @@ namespace ModMenu.Harness;
 public static class HostDeploy
 {
     public const string ModName = "ModMenuHarness";
+    public const string PeerModName = "ModMenuHarnessB";
 
     public static string WriteEnabledHost(string modsDir, string modName, string mainLua)
     {
@@ -22,41 +23,61 @@ public static class HostDeploy
         Directory.CreateDirectory(mods);
         EnsureSharedModMenu(mods, repoRoot, log);
 
-        var hostLuaPath = Path.Combine(repoRoot, "examples", "ModMenuHarness.lua");
-        if (!File.Exists(hostLuaPath))
-            throw new FileNotFoundException("Missing harness host Lua.", hostLuaPath);
+        var primary = DeployHost(mods, repoRoot, ModName, "ModMenuHarness.lua", playLive, log);
+        DeployHost(mods, repoRoot, PeerModName, "ModMenuHarnessB.lua", playLive, log);
 
-        var root = WriteEnabledHost(mods, ModName, File.ReadAllText(hostLuaPath));
-        var liveFlag = Path.Combine(root, "play-live.txt");
-        if (playLive)
+        foreach (var results in new[] { Ue4ssLayout.ResultsPath(win64Path), Ue4ssLayout.PeerResultsPath(win64Path) })
         {
-            File.WriteAllText(liveFlag, "");
-            log?.Invoke("play-live: suite will step with in-game delays.");
+            if (File.Exists(results))
+                File.Delete(results);
         }
 
-        var results = Ue4ssLayout.ResultsPath(win64Path);
-        if (File.Exists(results))
-            File.Delete(results);
-
-        log?.Invoke($"Deployed {ModName} to {root}");
-        return root;
+        return primary;
     }
 
     public static void Remove(string win64Path, Action<string>? log = null)
     {
-        var root = Path.Combine(Ue4ssLayout.ModsDirectory(win64Path), ModName);
-        if (Directory.Exists(root))
+        foreach (var name in new[] { ModName, PeerModName })
         {
-            Directory.Delete(root, recursive: true);
-            log?.Invoke($"Removed {root}");
+            var root = Path.Combine(Ue4ssLayout.ModsDirectory(win64Path), name);
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+                log?.Invoke($"Removed {root}");
+            }
         }
 
-        var results = Ue4ssLayout.ResultsPath(win64Path);
-        if (File.Exists(results))
+        foreach (var results in new[] { Ue4ssLayout.ResultsPath(win64Path), Ue4ssLayout.PeerResultsPath(win64Path) })
         {
-            File.Delete(results);
-            log?.Invoke($"Removed {results}");
+            if (File.Exists(results))
+            {
+                File.Delete(results);
+                log?.Invoke($"Removed {results}");
+            }
         }
+    }
+
+    private static string DeployHost(
+        string mods,
+        string repoRoot,
+        string modName,
+        string exampleFile,
+        bool playLive,
+        Action<string>? log)
+    {
+        var hostLuaPath = Path.Combine(repoRoot, "examples", exampleFile);
+        if (!File.Exists(hostLuaPath))
+            throw new FileNotFoundException("Missing harness host Lua.", hostLuaPath);
+
+        var root = WriteEnabledHost(mods, modName, File.ReadAllText(hostLuaPath));
+        if (playLive)
+        {
+            File.WriteAllText(Path.Combine(root, "play-live.txt"), "");
+            log?.Invoke($"play-live: {modName} will step with in-game delays.");
+        }
+
+        log?.Invoke($"Deployed {modName} to {root}");
+        return root;
     }
 
     private static void EnsureSharedModMenu(string modsDir, string repoRoot, Action<string>? log)

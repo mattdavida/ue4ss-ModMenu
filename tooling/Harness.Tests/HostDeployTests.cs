@@ -21,6 +21,7 @@ public sealed class HostDeployTests
         Directory.CreateDirectory(Path.Combine(repo, "examples"));
         Directory.CreateDirectory(Path.Combine(repo, "dist"));
         File.WriteAllText(Path.Combine(repo, "examples", "ModMenuHarness.lua"), "print('host')\n");
+        File.WriteAllText(Path.Combine(repo, "examples", "ModMenuHarnessB.lua"), "print('peer')\n");
         File.WriteAllText(Path.Combine(repo, "dist", "ModMenu.bundle.lua"), "-- bundle\n");
 
         var win64 = temp.Combine("Game", "Binaries", "Win64");
@@ -30,11 +31,14 @@ public sealed class HostDeployTests
 
         HostDeploy.Deploy(win64, repo, playLive: true);
         Assert.True(File.Exists(Path.Combine(mods, "ModMenuHarness", "Scripts", "main.lua")));
+        Assert.True(File.Exists(Path.Combine(mods, "ModMenuHarnessB", "Scripts", "main.lua")));
         Assert.True(File.Exists(Path.Combine(mods, "ModMenuHarness", "play-live.txt")));
+        Assert.True(File.Exists(Path.Combine(mods, "ModMenuHarnessB", "play-live.txt")));
         Assert.True(File.Exists(Path.Combine(mods, "shared", "ModMenu", "ModMenu.lua")));
 
         HostDeploy.Remove(win64);
         Assert.False(Directory.Exists(Path.Combine(mods, "ModMenuHarness")));
+        Assert.False(Directory.Exists(Path.Combine(mods, "ModMenuHarnessB")));
         Assert.True(File.Exists(Path.Combine(mods, "FatalClawMod", "keep.txt")));
         Assert.True(File.Exists(Path.Combine(mods, "shared", "ModMenu", "ModMenu.lua")));
     }

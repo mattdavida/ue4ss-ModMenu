@@ -7,6 +7,7 @@
     -- inputBackend = "engine" when RegisterKeyBind does not fire (e.g. Code Vein 2)
     -- cursorMode = "modmenu" when the game suppresses the engine cursor
     -- pointerMode = "touch" on handheld (checkbox buttons + ignore delayed latch)
+    -- showClose = false to hide the title-row Close button (on by default)
     ModMenu.Register({
       id = "MyMod",
       title = "My Mod",

@@ -23,7 +23,11 @@ public static class Ue4ssLayout
         => Path.Combine(Ue4ssRoot(win64Path), "Mods");
 
     public const string ResultsFileName = "ModMenuHarness-results.json";
+    public const string PeerResultsFileName = "ModMenuHarnessB-results.json";
 
     public static string ResultsPath(string win64Path)
         => Path.Combine(Ue4ssRoot(win64Path), ResultsFileName);
+
+    public static string PeerResultsPath(string win64Path)
+        => Path.Combine(Ue4ssRoot(win64Path), PeerResultsFileName);
 }

@@ -40,6 +40,9 @@ public sealed class Ue4ssLayoutTests
         Assert.Equal(
             Path.Combine(win64, "ue4ss", Ue4ssLayout.ResultsFileName),
             Ue4ssLayout.ResultsPath(win64));
+        Assert.Equal(
+            Path.Combine(win64, "ue4ss", Ue4ssLayout.PeerResultsFileName),
+            Ue4ssLayout.PeerResultsPath(win64));
         Assert.Equal(Path.Combine(win64, "ue4ss", "Mods"), Ue4ssLayout.ModsDirectory(win64));
     }
 }
