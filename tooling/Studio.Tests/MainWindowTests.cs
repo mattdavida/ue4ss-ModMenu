@@ -87,6 +87,81 @@ public sealed class MainWindowTests
         Assert.Contains("PASS  Get default dock", log, StringComparison.Ordinal);
         Assert.Contains("passed", log, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("FAIL  ", log, StringComparison.Ordinal);
+        await WaitForBanner(window, "Passed");
+        Assert.True(window.ResultBanner.IsVisible);
+        Assert.Contains("Lua suite", window.ResultBannerText.Text, StringComparison.Ordinal);
+        Assert.Contains("pass", window.ResultBanner.Classes);
+    }
+
+    [AvaloniaFact]
+    public async Task Failed_Lua_suite_shows_a_fail_banner()
+    {
+        var window = Open(new StudioSettings(), []);
+        window.RunLuaSuite = () => new SuiteResult
+        {
+            Ok = false,
+            Passed = 3,
+            Failed = 1,
+            Tests =
+            [
+                new SuiteCheck { Name = "Get default dock", Ok = true },
+                new SuiteCheck { Name = "Broken check", Ok = false, Detail = "nope" }
+            ]
+        };
+        window.LuaTestsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        await WaitForBanner(window, "Failed");
+        Assert.Contains("Lua suite", window.ResultBannerText.Text, StringComparison.Ordinal);
+        Assert.Contains("1 failed", window.ResultBannerText.Text, StringComparison.Ordinal);
+        Assert.Contains("fail", window.ResultBanner.Classes);
+    }
+
+    [AvaloniaFact]
+    public async Task In_game_pass_shows_a_pass_banner()
+    {
+        var claw = Game("Fatal Claw", @"D:\games\Fatal Claw");
+        var window = Open(
+            new StudioSettings
+            {
+                LastGameName = "Fatal Claw",
+                LastInstallPath = claw.InstallPath
+            },
+            [claw]);
+        window.RunInGame = (_, _) => new InGameResults { Ok = true, Passed = 70, Failed = 0 };
+
+        window.InGameTestButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        await WaitForBanner(window, "Passed");
+        Assert.Contains("In-game harness", window.ResultBannerText.Text, StringComparison.Ordinal);
+        Assert.Contains("70 checks", window.ResultBannerText.Text, StringComparison.Ordinal);
+        Assert.Contains("pass", window.ResultBanner.Classes);
+    }
+
+    [AvaloniaFact]
+    public async Task In_game_fail_shows_a_fail_banner()
+    {
+        var claw = Game("Fatal Claw", @"D:\games\Fatal Claw");
+        var window = Open(
+            new StudioSettings
+            {
+                LastGameName = "Fatal Claw",
+                LastInstallPath = claw.InstallPath
+            },
+            [claw]);
+        window.RunInGame = (_, _) => new InGameResults
+        {
+            Ok = false,
+            Passed = 68,
+            Failed = 2,
+            Failures = ["host: menu was not open"]
+        };
+
+        window.InGameTestButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        await WaitForBanner(window, "Failed");
+        Assert.Contains("In-game harness", window.ResultBannerText.Text, StringComparison.Ordinal);
+        Assert.Contains("2 failed", window.ResultBannerText.Text, StringComparison.Ordinal);
+        Assert.Contains("fail", window.ResultBanner.Classes);
     }
 
     private static MainWindow Open(
@@ -138,6 +213,21 @@ public sealed class MainWindowTests
         }
 
         return window.LogBox.Text ?? "";
+    }
+
+    private static async Task WaitForBanner(MainWindow window, string needle)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            Dispatcher.UIThread.RunJobs();
+            if (window.ResultBanner.IsVisible
+                && (window.ResultBannerText.Text ?? "").Contains(needle, StringComparison.Ordinal))
+                return;
+            await Task.Delay(50);
+        }
+
+        Assert.Fail($"Banner did not show '{needle}'. Got: {window.ResultBannerText.Text}");
     }
 }
 

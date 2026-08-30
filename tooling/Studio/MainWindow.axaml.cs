@@ -17,6 +17,9 @@ public partial class MainWindow : Window
     internal Action<DetectedGame> PersistGame { get; set; } = game => StudioSettings.Save(StudioSettings.FromGame(game));
     internal Func<StudioSettings, IReadOnlyList<DetectedGame>> LoadUe4ssGames { get; set; } =
         settings => GameCatalog.Load(settings).Where(game => game.HasUe4ss).ToList();
+    internal Func<SuiteResult> RunLuaSuite { get; set; } = () => LuaSuite.Run();
+    internal Func<DetectedGame, InGameTestOptions, InGameResults> RunInGame { get; set; } =
+        (game, options) => InGameTest.Run(game, options);
 
     public MainWindow()
     {
@@ -193,10 +196,11 @@ public partial class MainWindow : Window
             return;
 
         SetBusy(true);
+        SetRunStatus(running: "Running Lua suite…");
         Log("Running no-game Lua suite…");
         try
         {
-            var result = await Task.Run(() => LuaSuite.Run());
+            var result = await Task.Run(() => RunLuaSuite());
             foreach (var check in result.Tests)
             {
                 if (check.Ok)
@@ -208,10 +212,12 @@ public partial class MainWindow : Window
             Log($"{result.Passed} passed, {result.Failed} failed.");
             if (result.Ok)
                 Log("Lua suite ok.");
+            SetRunStatus(ok: result.Ok, title: "Lua suite", detail: Checks(result.Passed, result.Failed));
         }
         catch (Exception ex)
         {
             Log("Lua suite failed to run: " + ex.Message);
+            SetRunStatus(ok: false, title: "Lua suite", detail: ex.Message);
         }
         finally
         {
@@ -232,12 +238,15 @@ public partial class MainWindow : Window
 
         var game = _selected;
         SetBusy(true);
+        SetRunStatus(running: playLive
+            ? $"Launch and test live — {game.Name}…"
+            : $"Launch and test — {game.Name}…");
         Log(playLive
             ? $"Launch and test live: {game.Name} (suite steps with delays)"
             : $"Launch and test: {game.Name}");
         try
         {
-            var result = await Task.Run(() => InGameTest.Run(game, new InGameTestOptions
+            var result = await Task.Run(() => RunInGame(game, new InGameTestOptions
             {
                 PlayLive = playLive,
                 Log = line => Log(line)
@@ -247,10 +256,12 @@ public partial class MainWindow : Window
             foreach (var failure in result.Failures)
                 Log("  " + failure);
             Log(result.Ok ? "In-game harness ok." : "In-game harness failed.");
+            SetRunStatus(ok: result.Ok, title: "In-game harness", detail: Checks(result.Passed, result.Failed));
         }
         catch (Exception ex)
         {
             Log("In-game test failed to run: " + ex.Message);
+            SetRunStatus(ok: false, title: "In-game harness", detail: ex.Message);
         }
         finally
         {
@@ -261,8 +272,42 @@ public partial class MainWindow : Window
     private void SetBusy(bool busy)
     {
         _busy = busy;
+        LuaTestsButton.IsEnabled = !busy;
         SetInGameButtonsEnabled(!busy && _selected is not null);
     }
+
+    private void SetRunStatus(string? running = null, bool? ok = null, string? title = null, string? detail = null)
+    {
+        void Apply()
+        {
+            ResultBanner.Classes.Remove("run");
+            ResultBanner.Classes.Remove("pass");
+            ResultBanner.Classes.Remove("fail");
+
+            if (running is not null)
+            {
+                ResultBanner.Classes.Add("run");
+                ResultBannerText.Text = running;
+                ResultBanner.IsVisible = true;
+                return;
+            }
+
+            var head = ok == true ? "Passed" : "Failed";
+            ResultBanner.Classes.Add(ok == true ? "pass" : "fail");
+            ResultBannerText.Text = string.IsNullOrEmpty(detail)
+                ? $"{head}  ·  {title}"
+                : $"{head}  ·  {title}  ·  {detail}";
+            ResultBanner.IsVisible = true;
+        }
+
+        if (Dispatcher.UIThread.CheckAccess())
+            Apply();
+        else
+            Dispatcher.UIThread.Post(Apply);
+    }
+
+    private static string Checks(int passed, int failed)
+        => failed > 0 ? $"{passed} passed, {failed} failed" : $"{passed} checks";
 
     private void SetInGameButtonsEnabled(bool enabled)
     {

@@ -142,6 +142,33 @@
             <Setter Property="Background" Value="Transparent" />
         </Style>
 
+        <Style Selector="Border.result">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Border.result.run">
+            <Setter Property="Background" Value="#1800A3FF" />
+            <Setter Property="BorderBrush" Value="#4400A3FF" />
+        </Style>
+        <Style Selector="Border.result.pass">
+            <Setter Property="Background" Value="#14301F" />
+            <Setter Property="BorderBrush" Value="#3DCC7A" />
+        </Style>
+        <Style Selector="Border.result.fail">
+            <Setter Property="Background" Value="#3D1518" />
+            <Setter Property="BorderBrush" Value="#E24B4B" />
+        </Style>
+        <Style Selector="Border.result.run TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource AppAccent}" />
+        </Style>
+        <Style Selector="Border.result.pass TextBlock">
+            <Setter Property="Foreground" Value="#7DFFB3" />
+        </Style>
+        <Style Selector="Border.result.fail TextBlock">
+            <Setter Property="Foreground" Value="#FF8A8A" />
+        </Style>
+
         <Style Selector="Border.GameRow">
             <Setter Property="Background" Value="#14FFFFFF" />
             <Setter Property="BorderBrush" Value="Transparent" />

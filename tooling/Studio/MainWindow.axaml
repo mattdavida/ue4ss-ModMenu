@@ -112,13 +112,22 @@
                         BorderThickness="1"
                         Padding="16,14"
                         ClipToBounds="True">
-                    <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
                         <TextBlock Text="Log"
                                    Foreground="{StaticResource AppMuted}"
                                    FontSize="12"
                                    FontWeight="SemiBold" />
+                        <Border x:Name="ResultBanner"
+                                Grid.Row="1"
+                                Classes="result"
+                                IsVisible="False">
+                            <TextBlock x:Name="ResultBannerText"
+                                       FontWeight="SemiBold"
+                                       FontSize="14"
+                                       TextWrapping="Wrap" />
+                        </Border>
                         <TextBox x:Name="LogBox"
-                                 Grid.Row="1"
+                                 Grid.Row="2"
                                  Classes="log"
                                  IsReadOnly="True"
                                  AcceptsReturn="True"

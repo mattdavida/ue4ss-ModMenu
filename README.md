@@ -445,12 +445,22 @@ npm test
 # or: dotnet test tooling/ModMenu.sln
 dotnet run --project tooling/CLI -- test
 dotnet run --project tooling/CLI -- detect
-dotnet run --project tooling/Studio
 ```
 
-Lua specs live in `tooling/lua/` (store, dock math, options). Headless Studio window tests lock the picker, remembered last game, Refresh rebind, and the **Run Lua tests** log. In-game **Launch and test** stays local (needs Steam + a UE4SS game).
+Lua specs live in `tooling/lua/` (store, dock math, options). Headless Studio window tests lock the picker, remembered last game, Refresh rebind, the **Run Lua tests** log, and the last-run pass/fail banner.
 
-In-game: `dotnet run --project tooling/CLI -- test --game "Fatal Claw"` (or Studio **Launch and test**) deploys `examples/ModMenuHarness.lua` (left) and `examples/ModMenuHarnessB.lua` (right) as two enabled mods. After a **30s settle**, A opens and runs the Lua feature suite, then closes. B waits for A's results, opens on the right, and checks that it is a separate `instanceId` / serial / tab session (not dual-open). Polls both `ue4ss/ModMenuHarness-results.json` and `ModMenuHarnessB-results.json` for 120s (240s with `--play-live`), then closes the game (if this run launched it) and removes only the harness mods.
+### Studio
+
+![ModMenu Studio after Launch and test — Mortal Shell II, in-game harness passed (70 checks)](GithubAssets/ModMenuStudio-hero.png)
+
+*ModMenu Studio: pick a UE4SS game, run the no-game Lua suite, or **Launch and test**. The last-run bar stays on screen (here: in-game harness passed, 70 checks).*
+
+```bash
+dotnet run --project tooling/Studio
+# or: npm run studio
+```
+
+In-game **Launch and test** stays local (needs Steam + a UE4SS game). `dotnet run --project tooling/CLI -- test --game "Fatal Claw"` (or Studio **Launch and test**) deploys `examples/ModMenuHarness.lua` (left) and `examples/ModMenuHarnessB.lua` (right) as two enabled mods. After a **30s settle**, A opens and runs the Lua feature suite, then closes. B waits for A's results, opens on the right, and checks that it is a separate `instanceId` / serial / tab session (not dual-open). Polls both `ue4ss/ModMenuHarness-results.json` and `ModMenuHarnessB-results.json` for 120s (240s with `--play-live`), then closes the game (if this run launched it) and removes only the harness mods.
 
 `--play-live` writes `play-live.txt` on the host so the suite steps with `ExecuteInGameThreadWithDelay` (you can watch tabs/dock change). UE4SS must already be installed. FatalClawMod and `config.json` are left alone. `examples/ModMenuHost.lua` stays the human dummy; the harness is the suite.
 
