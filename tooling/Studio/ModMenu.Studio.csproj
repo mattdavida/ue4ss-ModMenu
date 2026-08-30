@@ -26,4 +26,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Harness\ModMenu.Harness.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ModMenu.Studio.Tests" />
+  </ItemGroup>
 </Project>

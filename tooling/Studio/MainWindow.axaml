@@ -83,7 +83,8 @@
                                        FontSize="13" />
                         </StackPanel>
                         <WrapPanel ItemSpacing="10" LineSpacing="10">
-                            <Button Classes="accent"
+                            <Button x:Name="LuaTestsButton"
+                                    Classes="accent"
                                     Content="Run Lua tests"
                                     MinWidth="140"
                                     Click="OnRunLuaTestsClick"
@@ -152,7 +153,8 @@
                                    FontSize="16"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center" />
-                        <Button Grid.Column="1"
+                        <Button x:Name="RefreshGamesButton"
+                                Grid.Column="1"
                                 Classes="refresh"
                                 Content="Refresh"
                                 Click="OnRefreshGamesClick"

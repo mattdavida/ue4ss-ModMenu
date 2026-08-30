@@ -13,6 +13,11 @@ public partial class MainWindow : Window
     private bool _busy;
     private bool _applyingPickerSelection;
 
+    internal Func<StudioSettings> LoadSettings { get; set; } = () => StudioSettings.Load();
+    internal Action<DetectedGame> PersistGame { get; set; } = game => StudioSettings.Save(StudioSettings.FromGame(game));
+    internal Func<StudioSettings, IReadOnlyList<DetectedGame>> LoadUe4ssGames { get; set; } =
+        settings => GameCatalog.Load(settings).Where(game => game.HasUe4ss).ToList();
+
     public MainWindow()
     {
         InitializeComponent();
@@ -32,10 +37,10 @@ public partial class MainWindow : Window
 
     private void ReloadGames(bool keepPicker = false)
     {
-        var settings = StudioSettings.Load();
+        var settings = LoadSettings();
         var previous = _selected;
         _games.Clear();
-        foreach (var game in GameCatalog.Load(settings).Where(game => game.HasUe4ss))
+        foreach (var game in LoadUe4ssGames(settings))
             _games.Add(ToRow(game));
 
         ApplyFilter();
@@ -179,7 +184,7 @@ public partial class MainWindow : Window
         SelectedStatus.Text = "UE4SS is present.";
         SetInGameButtonsEnabled(!_busy);
         if (persist)
-            StudioSettings.Save(StudioSettings.FromGame(game));
+            PersistGame(game);
     }
 
     private async void OnRunLuaTestsClick(object? sender, RoutedEventArgs e)

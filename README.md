@@ -448,7 +448,7 @@ dotnet run --project tooling/CLI -- detect
 dotnet run --project tooling/Studio
 ```
 
-Lua specs live in `tooling/lua/` (store, dock math, options). Studio is a picker over the same harness. In-game **Launch and test** stays local (needs Steam + a UE4SS game).
+Lua specs live in `tooling/lua/` (store, dock math, options). Headless Studio window tests lock the picker, remembered last game, Refresh rebind, and the **Run Lua tests** log. In-game **Launch and test** stays local (needs Steam + a UE4SS game).
 
 In-game: `dotnet run --project tooling/CLI -- test --game "Fatal Claw"` (or Studio **Launch and test**) deploys `examples/ModMenuHarness.lua` (left) and `examples/ModMenuHarnessB.lua` (right) as two enabled mods. After a **30s settle**, A opens and runs the Lua feature suite, then closes. B waits for A's results, opens on the right, and checks that it is a separate `instanceId` / serial / tab session (not dual-open). Polls both `ue4ss/ModMenuHarness-results.json` and `ModMenuHarnessB-results.json` for 120s (240s with `--play-live`), then closes the game (if this run launched it) and removes only the harness mods.
 
