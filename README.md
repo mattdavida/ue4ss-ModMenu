@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/mattdavida/ue4ss-ModMenu/actions/workflows/ci.yml/badge.svg)](https://github.com/mattdavida/ue4ss-ModMenu/actions/workflows/ci.yml)
 
+**Builder:** [https://mattdavida.github.io/ue4ss-ModMenu/](https://mattdavida.github.io/ue4ss-ModMenu/) — compose a menu in the browser and export a host zip (no Lua required). Extract the zip into `ue4ss/Mods/`.
+
 ModMenu is a lightweight UI framework for UE4SS Lua mods that lets feature modules register reusable in-game settings panels without each mod reimplementing its own ImGui or UMG shell.
 
 ![ModMenu Host (F8, left, Cheats tab) and Mortal Shell 2 (F6, right) — two independent shells](GithubAssets/ModMenuHero.png)
