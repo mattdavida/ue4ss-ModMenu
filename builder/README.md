@@ -1,5 +1,7 @@
 # ModMenu Builder
 
+**Try it:** [https://mattdavida.github.io/ue4ss-ModMenu/](https://mattdavida.github.io/ue4ss-ModMenu/)
+
 Lightweight React app: compose a menu from the widgets ModMenu already ships, then export a **JSON skeleton** or **Lua** `main.lua` (`Init` + `Register` + stubs). You do not need to learn the Register tables to lay out tabs and controls.
 
 Runtime contract: repo `README.md` item types + `widgets/*.lua`.
@@ -15,7 +17,7 @@ npm run dev
 
 From the repo root: `npm run builder`.
 
-Hosted (after merge to `main` + Pages source = GitHub Actions): [https://mattdavida.github.io/ue4ss-ModMenu/](https://mattdavida.github.io/ue4ss-ModMenu/). Static UI only — menus stay in the browser. **Export zip** is drop-in: extract into `ue4ss/Mods/` (host folder + `shared/ModMenu`).
+The hosted app is the same build. Menus stay in the browser. **Export zip** is drop-in: extract into `ue4ss/Mods/` (host folder + `shared/ModMenu`).
 
 ## Scripts
 
