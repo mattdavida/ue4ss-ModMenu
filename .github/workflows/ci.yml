@@ -10,7 +10,27 @@ permissions:
   contents: read
 
 jobs:
+  builder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: builder/package-lock.json
+
+      - name: Vitest
+        working-directory: builder
+        run: |
+          npm ci
+          npm test
+
   windows:
+    needs: builder
     runs-on: windows-latest
     # Job permissions cannot use expressions. Write is only used by
     # "Create GitHub Release", which is still gated to v* tags below.
